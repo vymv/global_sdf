@@ -1,3 +1,9 @@
-[submodule "gltf_sdf"]
-	path = gltf_sdf
+[submodule "extern/volk"]
+	path = extern/volk
+	url = https://github.com/zeux/volk.git
+[submodule "extern/gltf_sdf"]
+	path = extern/gltf_sdf
 	url = https://github.com/hipiPan/gltf_sdf.git
+[submodule "extern/Vulkan-Headers"]
+	path = extern/Vulkan-Headers
+	url = https://github.com/KhronosGroup/Vulkan-Headers.git
