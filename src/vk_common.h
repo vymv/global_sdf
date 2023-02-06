@@ -1,10 +1,13 @@
 #pragma once
 
+#define VK_DEBUG
 #ifdef _WIN32
 #define VK_USE_PLATFORM_WIN32_KHR
 #endif
 
 #include <volk.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #define VK_LOGE(...)                                 \
     do                                               \
