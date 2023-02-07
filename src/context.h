@@ -13,6 +13,7 @@ struct Context
     VkQueue queue = VK_NULL_HANDLE;
     VkCommandBuffer cmd = VK_NULL_HANDLE;
     VkCommandPool cmd_pool = VK_NULL_HANDLE;
+    uint32_t image_index = 0;
     VkSwapchainKHR swapchain = VK_NULL_HANDLE;
     VkSemaphore acquire_semaphore = VK_NULL_HANDLE;
     VkSemaphore release_semaphore = VK_NULL_HANDLE;

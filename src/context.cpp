@@ -226,7 +226,6 @@ void create_context(Context& ctx)
 
 void destroy_context(Context& ctx)
 {
-    VK_ASSERT(vkDeviceWaitIdle(ctx.device));
 #ifdef VK_DEBUG
     if (ctx.debug_messenger != VK_NULL_HANDLE)
     {
@@ -243,6 +242,38 @@ void submit(Context& ctx)
 {
     vkEndCommandBuffer(ctx.cmd);
 
+    VkPipelineStageFlags submit_stage_mask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+    VkSubmitInfo submit_info = {};
+    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submit_info.pWaitDstStageMask = &submit_stage_mask;
+    submit_info.commandBufferCount = 1;
+    submit_info.pCommandBuffers = &ctx.cmd;
+    if (ctx.acquire_semaphore != VK_NULL_HANDLE)
+    {
+        submit_info.waitSemaphoreCount = 1;
+        submit_info.pWaitSemaphores = &ctx.acquire_semaphore;
+    }
+    if (ctx.release_semaphore != VK_NULL_HANDLE)
+    {
+        submit_info.signalSemaphoreCount = 1;
+        submit_info.pSignalSemaphores = &ctx.release_semaphore;
+    }
+
+    VK_ASSERT(vkQueueSubmit(ctx.queue, 1, &submit_info, VK_NULL_HANDLE));
+
+    if (ctx.swapchain != VK_NULL_HANDLE)
+    {
+        VkPresentInfoKHR present_info = {};
+        present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+        present_info.waitSemaphoreCount = 1;
+        present_info.pWaitSemaphores = &ctx.release_semaphore;
+        present_info.swapchainCount = 1;
+        present_info.pSwapchains = &ctx.swapchain;
+        present_info.pImageIndices = &ctx.image_index;
+
+        VK_ASSERT(vkQueuePresentKHR(ctx.queue, &present_info));
+    }
+
     VK_ASSERT(vkDeviceWaitIdle(ctx.device));
 
     VK_ASSERT(vkResetCommandPool(ctx.device, ctx.cmd_pool, 0));
@@ -252,7 +283,7 @@ void submit(Context& ctx)
     begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     begin_info.pInheritanceInfo = nullptr;
     vkBeginCommandBuffer(ctx.cmd, &begin_info);
-    
+
     ctx.swapchain = VK_NULL_HANDLE;
     ctx.acquire_semaphore = VK_NULL_HANDLE;
     ctx.release_semaphore = VK_NULL_HANDLE;
