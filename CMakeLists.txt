@@ -11,6 +11,16 @@ add_executable(gltf_sdf_test ${SOURCE_FILES})
 add_subdirectory(extern/gltf_sdf)
 target_link_libraries(gltf_sdf_test PUBLIC gltf_sdf)
 
+# glfw
+add_subdirectory(extern/glfw EXCLUDE_FROM_ALL glfw.out)
+target_link_libraries(gltf_sdf_test PRIVATE glfw)
+
+# glm
+add_subdirectory(extern/glm)
+target_compile_definitions(glm INTERFACE GLM_ENABLE_EXPERIMENTAL=1)
+target_compile_definitions(glm INTERFACE GLM_FORCE_DEPTH_ZERO_TO_ONE=1)
+target_link_libraries(gltf_sdf_test PUBLIC glm)
+
 # volk
 add_library(volk STATIC extern/volk/volk.c extern/volk/volk.h)
 target_include_directories(volk PUBLIC extern/volk)
