@@ -612,20 +612,20 @@ static uint32_t select_memory_type(const VkPhysicalDeviceMemoryProperties& memor
     return ~0u;
 }
 
-void ez_create_buffer(size_t size, VkBufferUsageFlags usage, VkMemoryPropertyFlags memory_flags, EzBuffer& buffer)
+void ez_create_buffer(EzBufferDesc desc, EzBuffer& buffer)
 {
     buffer = new EzBuffer_T();
-    buffer->size = size;
+    buffer->size = desc.size;
 
     VkBufferCreateInfo buffer_create_info = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
     buffer_create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    buffer_create_info.size = size;
-    buffer_create_info.usage = usage;
+    buffer_create_info.size = desc.size;
+    buffer_create_info.usage = desc.usage;
     VK_ASSERT(vkCreateBuffer(ctx.device, &buffer_create_info, nullptr, &buffer->handle));
 
     VkMemoryRequirements memory_requirements;
     vkGetBufferMemoryRequirements(ctx.device, buffer->handle, &memory_requirements);
-    uint32_t memory_type_tndex = select_memory_type(ctx.physical_device_memory_properties, memory_requirements.memoryTypeBits, memory_flags);
+    uint32_t memory_type_tndex = select_memory_type(ctx.physical_device_memory_properties, memory_requirements.memoryTypeBits, desc.memory_flags);
 
     VkMemoryAllocateInfo allocate_info = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
     allocate_info.allocationSize = memory_requirements.size;
@@ -653,9 +653,11 @@ EzAllocation ez_alloc_stage_buffer(size_t size)
         stage_buffer_pool.size = ez_align_to((stage_buffer_pool.size + size) * 2, 8);
         stage_buffer_pool.offset = 0;
 
-        ez_create_buffer(stage_buffer_pool.size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                         stage_buffer_pool.current_buffer);
+        EzBufferDesc buffer_desc = {};
+        buffer_desc.size = stage_buffer_pool.size;
+        buffer_desc.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+        buffer_desc.memory_flags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+        ez_create_buffer(buffer_desc, stage_buffer_pool.current_buffer);
     }
 
     EzAllocation allocation;
@@ -664,6 +666,100 @@ EzAllocation ez_alloc_stage_buffer(size_t size)
     stage_buffer_pool.offset += ez_align_to(size, 8);
     return allocation;
 }
+
+// Texture
+void ez_create_texture(EzTextureDesc desc, EzTexture texture)
+{
+    texture = new EzTexture_T();
+    texture->width = desc.width;
+    texture->height = desc.height;
+    texture->depth = desc.depth;
+    texture->levels = desc.levels;
+    texture->layers = desc.layers;
+    texture->format = desc.format;
+
+    VkImageCreateInfo image_create_info = {};
+    image_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    image_create_info.imageType = desc.image_type;
+    image_create_info.format = desc.format;
+    image_create_info.extent.width = desc.width;
+    image_create_info.extent.height = desc.height;
+    image_create_info.extent.depth = desc.depth;
+    image_create_info.mipLevels = desc.levels;
+    image_create_info.arrayLayers = desc.layers;
+    image_create_info.samples = desc.samples;
+    image_create_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+    image_create_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    image_create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    image_create_info.queueFamilyIndexCount = 0;
+    image_create_info.pQueueFamilyIndices = nullptr;
+    image_create_info.flags = 0;
+    image_create_info.usage = desc.usage;
+    VK_ASSERT(vkCreateImage(ctx.device, &image_create_info, nullptr, &texture->handle));
+
+    VkMemoryRequirements memory_requirements;
+    vkGetImageMemoryRequirements(ctx.device, texture->handle, &memory_requirements);
+    uint32_t memoryTypeIndex = select_memory_type(ctx.physical_device_memory_properties, memory_requirements.memoryTypeBits, desc.memory_flags);
+
+    VkMemoryAllocateInfo allocate_info = {};
+    allocate_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocate_info.allocationSize = memory_requirements.size;
+    allocate_info.memoryTypeIndex = memoryTypeIndex;
+
+    VK_ASSERT(vkAllocateMemory(ctx.device, &allocate_info, 0, &texture->memory));
+    VK_ASSERT(vkBindImageMemory(ctx.device, texture->handle, texture->memory, 0));
+}
+
+void ez_destroy_texture(EzTexture texture)
+{
+    res_mgr.destroyer_images.emplace_back(std::make_pair(texture->handle, texture->memory), ctx.frame_count);
+    for (auto view : texture->views)
+    {
+        res_mgr.destroyer_imageviews.emplace_back(view, ctx.frame_count);
+    }
+    delete texture;
+}
+
+int ez_create_texture_view(EzTexture texture, VkImageViewType view_type,
+                           uint32_t base_level, uint32_t level_count,
+                           uint32_t base_layer, uint32_t layer_count)
+{
+    VkImageViewCreateInfo view_create_info = {};
+    view_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    view_create_info.flags = 0;
+    view_create_info.image = texture->handle;
+    view_create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    view_create_info.subresourceRange.baseArrayLayer = base_layer;
+    view_create_info.subresourceRange.layerCount = layer_count;
+    view_create_info.subresourceRange.baseMipLevel = base_level;
+    view_create_info.subresourceRange.levelCount = level_count;
+    view_create_info.format = texture->format;
+    view_create_info.viewType = view_type;
+
+    switch (view_create_info.format)
+    {
+        case VK_FORMAT_D16_UNORM:
+            view_create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+            break;
+        case VK_FORMAT_D32_SFLOAT:
+            view_create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+            break;
+        case VK_FORMAT_D24_UNORM_S8_UINT:
+            view_create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+            break;
+        case VK_FORMAT_D32_SFLOAT_S8_UINT:
+            view_create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+            break;
+    }
+    VkImageView image_view;
+    VK_ASSERT(vkCreateImageView(ctx.device, &view_create_info, nullptr, &image_view));
+
+    texture->views.push_back(image_view);
+    return int(texture->views.size()) - 1;
+}
+
+// Pipeline
+
 
 // Barrier
 VkImageMemoryBarrier2 ez_image_barrier(VkImage image,

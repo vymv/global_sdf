@@ -105,7 +105,13 @@ struct EzBuffer_T
 };
 VK_DEFINE_HANDLE(EzBuffer)
 
-void ez_create_buffer(size_t size, VkBufferUsageFlags usage, VkMemoryPropertyFlags memory_flags, EzBuffer& buffer);
+struct EzBufferDesc
+{
+    size_t size;
+    VkBufferUsageFlags usage;
+    VkMemoryPropertyFlags memory_flags;
+};
+void ez_create_buffer(EzBufferDesc desc, EzBuffer& buffer);
 
 void ez_destroy_buffer(EzBuffer buffer);
 
@@ -115,6 +121,50 @@ struct EzAllocation
     EzBuffer buffer = VK_NULL_HANDLE;
 };
 EzAllocation ez_alloc_stage_buffer(size_t size);
+
+// Texture
+struct EzTexture_T
+{
+    uint32_t width;
+    uint32_t height;
+    uint32_t depth;
+    uint32_t levels;
+    uint32_t layers;
+    VkFormat format;
+    VkImage handle;
+    VkDeviceMemory memory;
+    std::vector<VkImageView> views;
+};
+VK_DEFINE_HANDLE(EzTexture)
+
+struct EzTextureDesc
+{
+    uint32_t width;
+    uint32_t height;
+    uint32_t depth;
+    uint32_t levels;
+    uint32_t layers;
+    VkFormat format;
+    VkImageType image_type;
+    VkImageUsageFlags usage;
+    VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT;
+    VkMemoryPropertyFlags memory_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+};
+void ez_create_texture(EzTextureDesc desc, EzTexture texture);
+
+void ez_destroy_texture(EzTexture texture);
+
+int ez_create_texture_view(EzTexture texture, VkImageViewType view_type,
+                           uint32_t base_level, uint32_t level_count,
+                           uint32_t base_layer, uint32_t layer_count);
+
+// Pipeline
+struct EzShader_T
+{
+    VkShaderModule handle = VK_NULL_HANDLE;
+};
+VK_DEFINE_HANDLE(EzShader)
+
 
 // Barrier
 VkImageMemoryBarrier2 ez_image_barrier(VkImage image,

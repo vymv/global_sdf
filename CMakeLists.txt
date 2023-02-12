@@ -21,6 +21,11 @@ target_compile_definitions(glm INTERFACE GLM_ENABLE_EXPERIMENTAL=1)
 target_compile_definitions(glm INTERFACE GLM_FORCE_DEPTH_ZERO_TO_ONE=1)
 target_link_libraries(gltf_sdf_test PUBLIC glm)
 
+# spirv_reflect
+add_library(spirv_reflect STATIC extern/spirv_reflect/spirv_reflect.c extern/spirv_reflect/spirv_reflect.h)
+target_include_directories(gltf_sdf_test PUBLIC extern/spirv_reflect)
+target_link_libraries(gltf_sdf_test PUBLIC spirv_reflect)
+
 # volk
 add_library(volk STATIC extern/volk/volk.c extern/volk/volk.h)
 target_include_directories(volk PUBLIC extern/volk)
