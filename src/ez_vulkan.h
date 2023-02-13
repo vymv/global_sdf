@@ -183,7 +183,8 @@ void ez_destroy_sampler(EzSampler sampler);
 struct EzShader_T
 {
     VkShaderModule handle = VK_NULL_HANDLE;
-    VkPipelineShaderStageCreateInfo stage_info = {};
+    VkShaderStageFlagBits stage;
+    std::vector<VkPushConstantRange> pushconstants;
     std::vector<VkDescriptorSetLayoutBinding> layout_bindings;
 };
 VK_DEFINE_HANDLE(EzShader)
@@ -191,6 +192,19 @@ VK_DEFINE_HANDLE(EzShader)
 void ez_create_shader(void* data, size_t size, EzShader& shader);
 
 void ez_destroy_shader(EzShader shader);
+
+struct EzGraphicsPipeline_T
+{
+};
+VK_DEFINE_HANDLE(EzGraphicsPipeline)
+
+struct EzGraphicsPipelineDesc
+{
+
+};
+void ez_create_graphics_pipeline(EzGraphicsPipelineDesc desc, EzGraphicsPipeline& pipeline);
+
+void ez_destroy_graphics_pipeline(EzGraphicsPipeline pipeline);
 
 // Barrier
 VkImageMemoryBarrier2 ez_image_barrier(VkImage image,

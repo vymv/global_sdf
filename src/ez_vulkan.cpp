@@ -3,6 +3,7 @@
 #include <windows.h>
 #endif
 #include <deque>
+#include <spirv_reflect.h>
 
 struct Context
 {
@@ -786,6 +787,21 @@ void ez_destroy_sampler(EzSampler sampler)
 }
 
 // Pipeline
+static VkShaderStageFlagBits parse_shader_stage(SpvReflectShaderStageFlagBits reflect_shader_stage)
+{
+    switch (reflect_shader_stage)
+    {
+        case SPV_REFLECT_SHADER_STAGE_VERTEX_BIT:
+            return VK_SHADER_STAGE_VERTEX_BIT;
+        case SPV_REFLECT_SHADER_STAGE_FRAGMENT_BIT:
+            return VK_SHADER_STAGE_FRAGMENT_BIT;
+        case SPV_REFLECT_SHADER_STAGE_COMPUTE_BIT:
+            return VK_SHADER_STAGE_COMPUTE_BIT;
+        default:
+            return VkShaderStageFlagBits(0);
+    }
+}
+
 void ez_create_shader(void* data, size_t size, EzShader& shader)
 {
     shader = new EzShader_T();
@@ -797,7 +813,43 @@ void ez_create_shader(void* data, size_t size, EzShader& shader)
     VK_ASSERT(vkCreateShaderModule(ctx.device, &shader_create_info, nullptr, &shader->handle));
 
     // Parse shader
+    SpvReflectShaderModule reflect_shader_module;
+    SpvReflectResult reflect_result = spvReflectCreateShaderModule(shader_create_info.codeSize, shader_create_info.pCode, &reflect_shader_module);
 
+    shader->stage = parse_shader_stage(reflect_shader_module.shader_stage);
+
+    uint32_t binding_count = 0;
+    reflect_result = spvReflectEnumerateDescriptorBindings(&reflect_shader_module, &binding_count, nullptr);
+
+    std::vector<SpvReflectDescriptorBinding*> bindings(binding_count);
+    reflect_result = spvReflectEnumerateDescriptorBindings(&reflect_shader_module, &binding_count, bindings.data());
+
+    uint32_t push_count = 0;
+    reflect_result = spvReflectEnumeratePushConstantBlocks(&reflect_shader_module, &push_count, nullptr);
+
+    std::vector<SpvReflectBlockVariable*> pushconstants(push_count);
+    reflect_result = spvReflectEnumeratePushConstantBlocks(&reflect_shader_module, &push_count, pushconstants.data());
+
+    for (auto& x : pushconstants)
+    {
+        VkPushConstantRange pushconstant = {};
+        pushconstant.stageFlags = shader->stage;
+        pushconstant.offset = x->offset;
+        pushconstant.size = x->size;
+        shader->pushconstants.push_back(pushconstant);
+    }
+
+    for (auto& x : bindings)
+    {
+        VkDescriptorSetLayoutBinding descriptor = {};
+        descriptor.stageFlags = shader->stage;
+        descriptor.binding = x->binding;
+        descriptor.descriptorCount = x->count;
+        descriptor.descriptorType = (VkDescriptorType)x->descriptor_type;
+        shader->layout_bindings.push_back(descriptor);
+    }
+
+    spvReflectDestroyShaderModule(&reflect_shader_module);
 }
 
 void ez_destroy_shader(EzShader shader)
@@ -805,6 +857,10 @@ void ez_destroy_shader(EzShader shader)
     res_mgr.destroyer_shadermodules.emplace_back(shader->handle, ctx.frame_count);
     delete shader;
 }
+
+void ez_create_graphics_pipeline(EzGraphicsPipelineDesc desc, EzGraphicsPipeline& pipeline){}
+
+void ez_destroy_graphics_pipeline(EzGraphicsPipeline pipeline){}
 
 // Barrier
 VkImageMemoryBarrier2 ez_image_barrier(VkImage image,
