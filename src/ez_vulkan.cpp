@@ -274,9 +274,9 @@ void ez_init()
     instance_create_info.pNext = nullptr;
     instance_create_info.flags = 0;
     instance_create_info.pApplicationInfo = &app_info;
-    instance_create_info.enabledLayerCount = instance_layers.size();
+    instance_create_info.enabledLayerCount = (uint32_t)instance_layers.size();
     instance_create_info.ppEnabledLayerNames = instance_layers.data();
-    instance_create_info.enabledExtensionCount = instance_extensions.size();
+    instance_create_info.enabledExtensionCount = (uint32_t)instance_extensions.size();
     instance_create_info.ppEnabledExtensionNames = instance_extensions.data();
 
     VK_ASSERT(vkCreateInstance(&instance_create_info, nullptr, &ctx.instance));
@@ -379,7 +379,7 @@ void ez_init()
     device_create_info.queueCreateInfoCount = 1;
     device_create_info.pQueueCreateInfos = &queue_create_info;
     device_create_info.pEnabledFeatures = nullptr;
-    device_create_info.enabledExtensionCount = device_extensions.size();
+    device_create_info.enabledExtensionCount = (uint32_t)device_extensions.size();
     device_create_info.ppEnabledExtensionNames = device_extensions.data();
     device_create_info.enabledLayerCount = 0;
     device_create_info.ppEnabledLayerNames = nullptr;
@@ -668,7 +668,7 @@ EzAllocation ez_alloc_stage_buffer(size_t size)
 }
 
 // Texture
-void ez_create_texture(EzTextureDesc desc, EzTexture texture)
+void ez_create_texture(EzTextureDesc desc, EzTexture& texture)
 {
     texture = new EzTexture_T();
     texture->width = desc.width;
@@ -706,7 +706,7 @@ void ez_create_texture(EzTextureDesc desc, EzTexture texture)
     allocate_info.allocationSize = memory_requirements.size;
     allocate_info.memoryTypeIndex = memoryTypeIndex;
 
-    VK_ASSERT(vkAllocateMemory(ctx.device, &allocate_info, 0, &texture->memory));
+    VK_ASSERT(vkAllocateMemory(ctx.device, &allocate_info, nullptr, &texture->memory));
     VK_ASSERT(vkBindImageMemory(ctx.device, texture->handle, texture->memory, 0));
 }
 
@@ -758,8 +758,53 @@ int ez_create_texture_view(EzTexture texture, VkImageViewType view_type,
     return int(texture->views.size()) - 1;
 }
 
-// Pipeline
+void ez_create_sampler(EzSamplerDesc desc, EzSampler& sampler)
+{
+    sampler = new EzSampler_T();
 
+    VkSamplerCreateInfo sampler_create_info = {};
+    sampler_create_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    sampler_create_info.magFilter = desc.mag_filter;
+    sampler_create_info.minFilter = desc.min_filter;
+    sampler_create_info.mipmapMode = desc.mipmap_mode;
+    sampler_create_info.addressModeU = desc.address_u;
+    sampler_create_info.addressModeV = desc.address_v;
+    sampler_create_info.addressModeW = desc.address_w;
+    sampler_create_info.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+    sampler_create_info.anisotropyEnable = desc.anisotropy_enable;
+    sampler_create_info.maxAnisotropy = 0.0f;
+    sampler_create_info.unnormalizedCoordinates = VK_FALSE;
+    sampler_create_info.compareEnable = VK_FALSE;
+    sampler_create_info.compareOp = VK_COMPARE_OP_ALWAYS;
+    VK_ASSERT(vkCreateSampler(ctx.device, &sampler_create_info, nullptr, &sampler->handle));
+}
+
+void ez_destroy_sampler(EzSampler sampler)
+{
+    res_mgr.destroyer_samplers.emplace_back(std::make_pair(sampler->handle, ctx.frame_count));
+    delete sampler;
+}
+
+// Pipeline
+void ez_create_shader(void* data, size_t size, EzShader& shader)
+{
+    shader = new EzShader_T();
+
+    VkShaderModuleCreateInfo shader_create_info = {};
+    shader_create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    shader_create_info.codeSize = size;
+    shader_create_info.pCode = (const uint32_t*)data;
+    VK_ASSERT(vkCreateShaderModule(ctx.device, &shader_create_info, nullptr, &shader->handle));
+
+    // Parse shader
+
+}
+
+void ez_destroy_shader(EzShader shader)
+{
+    res_mgr.destroyer_shadermodules.emplace_back(shader->handle, ctx.frame_count);
+    delete shader;
+}
 
 // Barrier
 VkImageMemoryBarrier2 ez_image_barrier(VkImage image,

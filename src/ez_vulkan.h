@@ -150,7 +150,7 @@ struct EzTextureDesc
     VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT;
     VkMemoryPropertyFlags memory_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 };
-void ez_create_texture(EzTextureDesc desc, EzTexture texture);
+void ez_create_texture(EzTextureDesc desc, EzTexture& texture);
 
 void ez_destroy_texture(EzTexture texture);
 
@@ -158,13 +158,39 @@ int ez_create_texture_view(EzTexture texture, VkImageViewType view_type,
                            uint32_t base_level, uint32_t level_count,
                            uint32_t base_layer, uint32_t layer_count);
 
+struct EzSampler_T
+{
+    VkSampler handle = VK_NULL_HANDLE;
+};
+VK_DEFINE_HANDLE(EzSampler)
+
+struct EzSamplerDesc
+{
+    VkFilter mag_filter = VK_FILTER_LINEAR;
+    VkFilter min_filter = VK_FILTER_LINEAR;
+    VkSamplerAddressMode address_u = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    VkSamplerAddressMode address_v = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    VkSamplerAddressMode address_w = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    VkSamplerMipmapMode mipmap_mode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    VkBorderColor border_color = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+    bool anisotropy_enable = false;
+};
+void ez_create_sampler(EzSamplerDesc desc, EzSampler& sampler);
+
+void ez_destroy_sampler(EzSampler sampler);
+
 // Pipeline
 struct EzShader_T
 {
     VkShaderModule handle = VK_NULL_HANDLE;
+    VkPipelineShaderStageCreateInfo stage_info = {};
+    std::vector<VkDescriptorSetLayoutBinding> layout_bindings;
 };
 VK_DEFINE_HANDLE(EzShader)
 
+void ez_create_shader(void* data, size_t size, EzShader& shader);
+
+void ez_destroy_shader(EzShader shader);
 
 // Barrier
 VkImageMemoryBarrier2 ez_image_barrier(VkImage image,
