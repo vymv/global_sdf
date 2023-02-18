@@ -613,7 +613,7 @@ static uint32_t select_memory_type(const VkPhysicalDeviceMemoryProperties& memor
     return ~0u;
 }
 
-void ez_create_buffer(EzBufferDesc desc, EzBuffer& buffer)
+void ez_create_buffer(const EzBufferDesc& desc, EzBuffer& buffer)
 {
     buffer = new EzBuffer_T();
     buffer->size = desc.size;
@@ -669,7 +669,7 @@ EzAllocation ez_alloc_stage_buffer(size_t size)
 }
 
 // Texture
-void ez_create_texture(EzTextureDesc desc, EzTexture& texture)
+void ez_create_texture(const EzTextureDesc& desc, EzTexture& texture)
 {
     texture = new EzTexture_T();
     texture->width = desc.width;
@@ -759,7 +759,7 @@ int ez_create_texture_view(EzTexture texture, VkImageViewType view_type,
     return int(texture->views.size()) - 1;
 }
 
-void ez_create_sampler(EzSamplerDesc desc, EzSampler& sampler)
+void ez_create_sampler(const EzSamplerDesc& desc, EzSampler& sampler)
 {
     sampler = new EzSampler_T();
 
@@ -858,9 +858,199 @@ void ez_destroy_shader(EzShader shader)
     delete shader;
 }
 
-void ez_create_graphics_pipeline(EzGraphicsPipelineDesc desc, EzGraphicsPipeline& pipeline){}
+uint32_t GetFormatStride(VkFormat format)
+{
+    switch (format)
+    {
+        case VK_FORMAT_R32G32B32A32_SFLOAT:
+        case VK_FORMAT_R32G32B32A32_UINT:
+        case VK_FORMAT_R32G32B32A32_SINT:
+            return 16;
 
-void ez_destroy_graphics_pipeline(EzGraphicsPipeline pipeline){}
+        case VK_FORMAT_R32G32B32_SFLOAT:
+        case VK_FORMAT_R32G32B32_UINT:
+        case VK_FORMAT_R32G32B32_SINT:
+            return 12;
+
+        case VK_FORMAT_R16G16B16A16_SFLOAT:
+        case VK_FORMAT_R16G16B16A16_UNORM:
+        case VK_FORMAT_R16G16B16A16_UINT:
+        case VK_FORMAT_R16G16B16A16_SNORM:
+        case VK_FORMAT_R16G16B16A16_SINT:
+        case VK_FORMAT_R32G32_SFLOAT:
+        case VK_FORMAT_R32G32_UINT:
+        case VK_FORMAT_R32G32_SINT:
+            return 8;
+
+        case VK_FORMAT_R8G8B8A8_UNORM:
+        case VK_FORMAT_R8G8B8A8_UINT:
+        case VK_FORMAT_R8G8B8A8_SNORM:
+        case VK_FORMAT_R8G8B8A8_SINT:
+        case VK_FORMAT_B8G8R8A8_UNORM:
+        case VK_FORMAT_R16G16_SFLOAT:
+        case VK_FORMAT_R16G16_UNORM:
+        case VK_FORMAT_R16G16_UINT:
+        case VK_FORMAT_R16G16_SNORM:
+        case VK_FORMAT_R16G16_SINT:
+        case VK_FORMAT_D32_SFLOAT:
+        case VK_FORMAT_R32_SFLOAT:
+        case VK_FORMAT_R32_UINT:
+        case VK_FORMAT_R32_SINT:
+        case VK_FORMAT_D24_UNORM_S8_UINT:
+            return 4;
+
+        case VK_FORMAT_R8G8_UNORM:
+        case VK_FORMAT_R8G8_UINT:
+        case VK_FORMAT_R8G8_SNORM:
+        case VK_FORMAT_R8G8_SINT:
+        case VK_FORMAT_R16_SFLOAT:
+        case VK_FORMAT_D16_UNORM:
+        case VK_FORMAT_R16_UNORM:
+        case VK_FORMAT_R16_UINT:
+        case VK_FORMAT_R16_SNORM:
+        case VK_FORMAT_R16_SINT:
+            return 2;
+
+        case VK_FORMAT_R8_UNORM:
+        case VK_FORMAT_R8_UINT:
+        case VK_FORMAT_R8_SNORM:
+        case VK_FORMAT_R8_SINT:
+            return 1;
+
+        default:
+            break;
+    }
+
+    return 0;
+}
+
+void ez_create_graphics_pipeline(const EzGraphicsPipelineDesc& desc, EzGraphicsPipeline& pipeline)
+{
+    VkGraphicsPipelineCreateInfo pipeline_info = {};
+
+    // Input
+    VkPipelineInputAssemblyStateCreateInfo input_assembly = {};
+    input_assembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    input_assembly.topology = desc.input_assembly.topology;
+    input_assembly.primitiveRestartEnable = VK_FALSE;
+    pipeline_info.pInputAssemblyState = &input_assembly;
+
+    uint32_t num_input_bindings = 0;
+    VkVertexInputBindingDescription input_bindings[15] = {{0}};
+    uint32_t num_input_attributes = 0;
+    VkVertexInputAttributeDescription input_attributes[15] = {{0}};
+    uint32_t binding_value = UINT32_MAX;
+    for (auto& element : desc.input_layout.elements)
+    {
+        if (binding_value != element.binding)
+        {
+            binding_value = element.binding;
+            ++num_input_bindings;
+        }
+        input_bindings[num_input_bindings - 1].binding = binding_value;
+        input_bindings[num_input_bindings - 1].inputRate = element.rate;
+        input_bindings[num_input_bindings - 1].stride += GetFormatStride(element.format);
+        input_attributes[num_input_attributes].location = element.location;
+        input_attributes[num_input_attributes].binding = element.binding;
+        input_attributes[num_input_attributes].format = element.format;
+        input_attributes[num_input_attributes].offset = element.offset;
+        ++num_input_attributes;
+    }
+
+    VkPipelineVertexInputStateCreateInfo vertex_input_info = {};
+    vertex_input_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertex_input_info.vertexBindingDescriptionCount = num_input_bindings;
+    vertex_input_info.pVertexBindingDescriptions = input_bindings;
+    vertex_input_info.vertexAttributeDescriptionCount = num_input_attributes;
+    vertex_input_info.pVertexAttributeDescriptions = input_attributes;
+    pipeline_info.pVertexInputState = &vertex_input_info;
+
+    // MSAA
+    VkPipelineMultisampleStateCreateInfo multisampling = {};
+    multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    multisampling.sampleShadingEnable = VK_FALSE;
+    multisampling.rasterizationSamples = desc.multisample_state.samples;
+    multisampling.alphaToCoverageEnable = VK_FALSE;
+    multisampling.alphaToOneEnable = VK_FALSE;
+    pipeline_info.pMultisampleState = &multisampling;
+
+    // Blend
+    uint32_t num_blend_attachments = 0;
+    VkPipelineColorBlendAttachmentState blend_attachments[4] = {};
+    for (uint32_t i = 0; i < 4; ++i)
+    {
+        VkPipelineColorBlendAttachmentState& attachment = blend_attachments[num_blend_attachments];
+        attachment.blendEnable = desc.blend_state.blend_enable ? VK_TRUE : VK_FALSE;
+        attachment.colorWriteMask |= VK_COLOR_COMPONENT_R_BIT;
+        attachment.colorWriteMask |= VK_COLOR_COMPONENT_G_BIT;
+        attachment.colorWriteMask |= VK_COLOR_COMPONENT_B_BIT;
+        attachment.colorWriteMask |= VK_COLOR_COMPONENT_A_BIT;
+        attachment.srcColorBlendFactor = desc.blend_state.src_color;
+        attachment.dstColorBlendFactor = desc.blend_state.dst_color;
+        attachment.colorBlendOp = desc.blend_state.color_op;
+        attachment.srcAlphaBlendFactor = desc.blend_state.src_alpha;
+        attachment.dstAlphaBlendFactor = desc.blend_state.dst_alpha;
+        attachment.alphaBlendOp = desc.blend_state.alpha_op;
+        num_blend_attachments++;
+    }
+
+    VkPipelineColorBlendStateCreateInfo blending_info = {};
+    blending_info.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    blending_info.logicOpEnable = VK_FALSE;
+    blending_info.logicOp = VK_LOGIC_OP_COPY;
+    blending_info.attachmentCount = num_blend_attachments;
+    blending_info.pAttachments = blend_attachments;
+    blending_info.blendConstants[0] = 1.0f;
+    blending_info.blendConstants[1] = 1.0f;
+    blending_info.blendConstants[2] = 1.0f;
+    blending_info.blendConstants[3] = 1.0f;
+    pipeline_info.pColorBlendState = &blending_info;
+
+    // Tessellation
+    VkPipelineTessellationStateCreateInfo tessellation_info = {};
+    tessellation_info.sType = VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO;
+    tessellation_info.patchControlPoints = 3;
+    pipeline_info.pTessellationState = &tessellation_info;
+
+    // Viewport state
+    VkPipelineViewportStateCreateInfo viewport_state = {};
+    viewport_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewport_state.viewportCount = 1;
+    viewport_state.pViewports = nullptr;
+    viewport_state.scissorCount = 1;
+    viewport_state.pScissors = nullptr;
+    pipeline_info.pViewportState = &viewport_state;
+
+    // Dynamic states
+    VkDynamicState dynamic_states[5];
+    dynamic_states[0] = VK_DYNAMIC_STATE_VIEWPORT;
+    dynamic_states[1] = VK_DYNAMIC_STATE_SCISSOR;
+    dynamic_states[2] = VK_DYNAMIC_STATE_DEPTH_BIAS;
+    dynamic_states[3] = VK_DYNAMIC_STATE_BLEND_CONSTANTS;
+    dynamic_states[4] = VK_DYNAMIC_STATE_DEPTH_BOUNDS;
+
+    VkPipelineDynamicStateCreateInfo dynamic_state = {};
+    dynamic_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamic_state.flags = 0;
+    dynamic_state.dynamicStateCount = 5;
+    dynamic_state.pDynamicStates = dynamic_states;
+    pipeline_info.pDynamicState = &dynamic_state;
+
+    // Renderpass layout
+    VkPipelineRenderingCreateInfo rendering_info = {};
+    rendering_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
+    rendering_info.colorAttachmentCount = (uint32_t)desc.pipeline_rendering.color_formats.size();
+    rendering_info.pColorAttachmentFormats = desc.pipeline_rendering.color_formats.data();
+    rendering_info.depthAttachmentFormat = desc.pipeline_rendering.depth_format;
+    rendering_info.stencilAttachmentFormat = desc.pipeline_rendering.stencil_format;
+    pipeline_info.pNext = &rendering_info;
+}
+
+void ez_destroy_graphics_pipeline(EzGraphicsPipeline pipeline)
+{
+    res_mgr.destroyer_pipelines.emplace_back(pipeline->handle, ctx.frame_count);
+    delete pipeline;
+}
 
 // Barrier
 VkImageMemoryBarrier2 ez_image_barrier(VkImage image,

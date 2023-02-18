@@ -111,7 +111,7 @@ struct EzBufferDesc
     VkBufferUsageFlags usage;
     VkMemoryPropertyFlags memory_flags;
 };
-void ez_create_buffer(EzBufferDesc desc, EzBuffer& buffer);
+void ez_create_buffer(const EzBufferDesc& desc, EzBuffer& buffer);
 
 void ez_destroy_buffer(EzBuffer buffer);
 
@@ -150,7 +150,7 @@ struct EzTextureDesc
     VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT;
     VkMemoryPropertyFlags memory_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 };
-void ez_create_texture(EzTextureDesc desc, EzTexture& texture);
+void ez_create_texture(const EzTextureDesc& desc, EzTexture& texture);
 
 void ez_destroy_texture(EzTexture texture);
 
@@ -175,7 +175,7 @@ struct EzSamplerDesc
     VkBorderColor border_color = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
     bool anisotropy_enable = false;
 };
-void ez_create_sampler(EzSamplerDesc desc, EzSampler& sampler);
+void ez_create_sampler(const EzSamplerDesc& desc, EzSampler& sampler);
 
 void ez_destroy_sampler(EzSampler sampler);
 
@@ -195,14 +195,97 @@ void ez_destroy_shader(EzShader shader);
 
 struct EzGraphicsPipeline_T
 {
+    VkPipeline handle = VK_NULL_HANDLE;
+    VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
+    VkDescriptorSetLayout descriptor_set_layout = VK_NULL_HANDLE;
+    std::vector<VkDescriptorSetLayoutBinding> layout_bindings;
+    std::vector<VkPushConstantRange> pushconstants;
 };
 VK_DEFINE_HANDLE(EzGraphicsPipeline)
 
+struct EzInputElement
+{
+    uint32_t binding = 0;
+    uint32_t location = 0;
+    uint32_t offset = 0;
+    uint32_t size = 0;
+    VkFormat format = VK_FORMAT_UNDEFINED;
+    VkVertexInputRate rate = VK_VERTEX_INPUT_RATE_VERTEX;
+};
+
+struct EzInputAssembly
+{
+    VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
+};
+
+struct EzInputLayout
+{
+    std::vector<EzInputElement> elements;
+};
+
+struct EzBlendState
+{
+    bool blend_enable = false;
+    VkBlendFactor src_color = VK_BLEND_FACTOR_SRC_ALPHA;
+    VkBlendFactor dst_color = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    VkBlendOp color_op = VK_BLEND_OP_ADD;
+    VkBlendFactor src_alpha = VK_BLEND_FACTOR_ONE;
+    VkBlendFactor dst_alpha = VK_BLEND_FACTOR_ONE;
+    VkBlendOp alpha_op = VK_BLEND_OP_ADD;
+};
+
+struct EzRasterizationState
+{
+    VkPolygonMode fill_mode = VK_POLYGON_MODE_FILL;
+    VkFrontFace front_face = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    VkCullModeFlagBits cull_mode = VK_CULL_MODE_NONE;
+};
+
+struct EzMultisampleState
+{
+    bool multi_sample_enable = false;
+    VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT;
+};
+
+struct EzDepthStencilOp
+{
+    VkStencilOp stencil_fail_op = VK_STENCIL_OP_KEEP;
+    VkStencilOp stencil_depth_fail_op = VK_STENCIL_OP_KEEP;
+    VkStencilOp stencil_pass_op = VK_STENCIL_OP_KEEP;
+    VkCompareOp stencil_func = VK_COMPARE_OP_ALWAYS;
+};
+
+struct EzDepthStencilState
+{
+    bool depth_test = false;
+    bool depth_write = true;
+    VkCompareOp depth_func = VK_COMPARE_OP_LESS_OR_EQUAL;
+    bool stencil_test = false;
+    uint8_t stencil_read_mask = 0xff;
+    uint8_t stencil_write_mask = 0xff;
+    EzDepthStencilOp front_face = {};
+    EzDepthStencilOp back_face = {};
+};
+
+struct EzPipelineRendering
+{
+    std::vector<VkFormat> color_formats;
+    VkFormat depth_format = VK_FORMAT_UNDEFINED;
+    VkFormat stencil_format = VK_FORMAT_UNDEFINED;
+};
+
 struct EzGraphicsPipelineDesc
 {
-
+    EzShader vertex_shader = VK_NULL_HANDLE;
+    EzShader fragment_shader = VK_NULL_HANDLE;
+    EzInputAssembly input_assembly = {};
+    EzInputLayout input_layout = {};
+    EzBlendState blend_state = {};
+    EzRasterizationState rasterization_state = {};
+    EzMultisampleState multisample_state = {};
+    EzPipelineRendering pipeline_rendering = {};
 };
-void ez_create_graphics_pipeline(EzGraphicsPipelineDesc desc, EzGraphicsPipeline& pipeline);
+void ez_create_graphics_pipeline(const EzGraphicsPipelineDesc& desc, EzGraphicsPipeline& pipeline);
 
 void ez_destroy_graphics_pipeline(EzGraphicsPipeline pipeline);
 
