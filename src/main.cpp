@@ -31,7 +31,7 @@ int main()
                                                               0, 0, VK_IMAGE_LAYOUT_UNDEFINED,
                                                               0, 0, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
                                                               VK_IMAGE_ASPECT_COLOR_BIT);
-        ez_pipeline_barrier(ez_cmd(), VK_DEPENDENCY_BY_REGION_BIT, 0, nullptr, 1, &present_barrier);
+        ez_pipeline_barrier(VK_DEPENDENCY_BY_REGION_BIT, 0, nullptr, 1, &present_barrier);
 
         ez_present(swapchain);
 

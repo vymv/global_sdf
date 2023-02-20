@@ -21,6 +21,8 @@ struct Context
     VkSwapchainKHR swapchain = VK_NULL_HANDLE;
     VkSemaphore acquire_semaphore = VK_NULL_HANDLE;
     VkSemaphore release_semaphore = VK_NULL_HANDLE;
+    EzGraphicsPipeline graphics_pipeline = VK_NULL_HANDLE;
+    EzComputePipeline compute_pipeline = VK_NULL_HANDLE;
 } ctx;
 
 struct ResourceManager
@@ -678,6 +680,7 @@ void ez_create_texture(const EzTextureDesc& desc, EzTexture& texture)
     texture->levels = desc.levels;
     texture->layers = desc.layers;
     texture->format = desc.format;
+    texture->layout = VK_IMAGE_LAYOUT_UNDEFINED;
 
     VkImageCreateInfo image_create_info = {};
     image_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -816,7 +819,10 @@ void ez_create_shader(void* data, size_t size, EzShader& shader)
     SpvReflectShaderModule reflect_shader_module;
     SpvReflectResult reflect_result = spvReflectCreateShaderModule(shader_create_info.codeSize, shader_create_info.pCode, &reflect_shader_module);
 
-    shader->stage = parse_shader_stage(reflect_shader_module.shader_stage);
+    shader->stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    shader->stage_info.module = shader->handle;
+    shader->stage_info.pName = "main";
+    shader->stage_info.stage = parse_shader_stage(reflect_shader_module.shader_stage);
 
     uint32_t binding_count = 0;
     reflect_result = spvReflectEnumerateDescriptorBindings(&reflect_shader_module, &binding_count, nullptr);
@@ -833,7 +839,7 @@ void ez_create_shader(void* data, size_t size, EzShader& shader)
     for (auto& x : pushconstants)
     {
         VkPushConstantRange pushconstant = {};
-        pushconstant.stageFlags = shader->stage;
+        pushconstant.stageFlags = shader->stage_info.stage;
         pushconstant.offset = x->offset;
         pushconstant.size = x->size;
         shader->pushconstants.push_back(pushconstant);
@@ -842,7 +848,7 @@ void ez_create_shader(void* data, size_t size, EzShader& shader)
     for (auto& x : bindings)
     {
         VkDescriptorSetLayoutBinding descriptor = {};
-        descriptor.stageFlags = shader->stage;
+        descriptor.stageFlags = shader->stage_info.stage;
         descriptor.binding = x->binding;
         descriptor.descriptorCount = x->count;
         descriptor.descriptorType = (VkDescriptorType)x->descriptor_type;
@@ -926,7 +932,86 @@ uint32_t GetFormatStride(VkFormat format)
 
 void ez_create_graphics_pipeline(const EzGraphicsPipelineDesc& desc, EzGraphicsPipeline& pipeline)
 {
+    pipeline = new EzGraphicsPipeline_T();
+
+    // Pipeline layout
+    auto insert_shader = [&](EzShader shader)
+    {
+        if (shader == VK_NULL_HANDLE)
+            return;
+
+        uint32_t i = 0;
+        for (auto& x : shader->layout_bindings)
+        {
+            bool found = false;
+            for (auto& y : pipeline->layout_bindings)
+            {
+                if (x.binding == y.binding)
+                {
+                    found = true;
+                    y.stageFlags |= x.stageFlags;
+                    break;
+                }
+            }
+
+            if (!found)
+            {
+                pipeline->layout_bindings.push_back(x);
+            }
+            i++;
+        }
+
+        for (auto& x : shader->pushconstants)
+        {
+            pipeline->pushconstants.push_back(x);
+        }
+    };
+
+    insert_shader(desc.vertex_shader);
+    insert_shader(desc.fragment_shader);
+
+    std::vector<VkDescriptorSetLayout> set_layouts;
+    VkDescriptorSetLayoutCreateInfo descriptor_set_layout_create_info = {};
+    descriptor_set_layout_create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    descriptor_set_layout_create_info.pBindings = pipeline->layout_bindings.data();
+    descriptor_set_layout_create_info.bindingCount = (uint32_t)pipeline->layout_bindings.size();
+    VK_ASSERT(vkCreateDescriptorSetLayout(ctx.device, &descriptor_set_layout_create_info, nullptr, &pipeline->descriptor_set_layout));
+    set_layouts.push_back(pipeline->descriptor_set_layout);
+
+    VkPipelineLayoutCreateInfo pipeline_layout_create_info = {};
+    pipeline_layout_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipeline_layout_create_info.pSetLayouts = set_layouts.data();
+    pipeline_layout_create_info.setLayoutCount = (uint32_t)set_layouts.size();
+    if (!pipeline->pushconstants.empty())
+    {
+        pipeline_layout_create_info.pushConstantRangeCount = (uint32_t)pipeline->pushconstants.size();
+        pipeline_layout_create_info.pPushConstantRanges = pipeline->pushconstants.data();
+    }
+    else
+    {
+        pipeline_layout_create_info.pushConstantRangeCount = 0;
+        pipeline_layout_create_info.pPushConstantRanges = nullptr;
+    }
+    VK_ASSERT(vkCreatePipelineLayout(ctx.device, &pipeline_layout_create_info, nullptr, &pipeline->pipeline_layout));
+
     VkGraphicsPipelineCreateInfo pipeline_info = {};
+    pipeline_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pipeline_info.layout = pipeline->pipeline_layout;
+    pipeline_info.basePipelineHandle = VK_NULL_HANDLE;
+
+    // Shader
+    uint32_t shader_stage_count = 0;
+    VkPipelineShaderStageCreateInfo shader_stages[2] = {};
+    if (desc.vertex_shader != VK_NULL_HANDLE)
+    {
+        shader_stages[shader_stage_count++] = desc.vertex_shader->stage_info;
+    }
+    if (desc.fragment_shader != VK_NULL_HANDLE)
+    {
+        shader_stages[shader_stage_count++] = desc.fragment_shader->stage_info;
+    }
+    pipeline_info.stageCount = shader_stage_count;
+    pipeline_info.pStages = shader_stages;
 
     // Input
     VkPipelineInputAssemblyStateCreateInfo input_assembly = {};
@@ -964,6 +1049,21 @@ void ez_create_graphics_pipeline(const EzGraphicsPipelineDesc& desc, EzGraphicsP
     vertex_input_info.vertexAttributeDescriptionCount = num_input_attributes;
     vertex_input_info.pVertexAttributeDescriptions = input_attributes;
     pipeline_info.pVertexInputState = &vertex_input_info;
+
+    // Rasterization
+    VkPipelineRasterizationStateCreateInfo rasterizer = {};
+    rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    rasterizer.depthClampEnable = VK_TRUE;
+    rasterizer.rasterizerDiscardEnable = VK_FALSE;
+    rasterizer.polygonMode = desc.rasterization_state.fill_mode;
+    rasterizer.lineWidth = 1.0f;
+    rasterizer.cullMode = desc.rasterization_state.cull_mode;
+    rasterizer.frontFace = desc.rasterization_state.front_face;
+    rasterizer.depthBiasEnable = VK_FALSE;
+    rasterizer.depthBiasConstantFactor = 0.0f;
+    rasterizer.depthBiasClamp = 0.0f;
+    rasterizer.depthBiasSlopeFactor = 0.0f;
+    pipeline_info.pRasterizationState = &rasterizer;
 
     // MSAA
     VkPipelineMultisampleStateCreateInfo multisampling = {};
@@ -1044,12 +1144,125 @@ void ez_create_graphics_pipeline(const EzGraphicsPipelineDesc& desc, EzGraphicsP
     rendering_info.depthAttachmentFormat = desc.pipeline_rendering.depth_format;
     rendering_info.stencilAttachmentFormat = desc.pipeline_rendering.stencil_format;
     pipeline_info.pNext = &rendering_info;
+
+    VK_ASSERT(vkCreateGraphicsPipelines(ctx.device, VK_NULL_HANDLE, 1, &pipeline_info, nullptr, &pipeline->handle));
 }
 
 void ez_destroy_graphics_pipeline(EzGraphicsPipeline pipeline)
 {
     res_mgr.destroyer_pipelines.emplace_back(pipeline->handle, ctx.frame_count);
     delete pipeline;
+}
+
+// Funcs
+void ez_begin_rendering(const EzVkRenderingInfo& rendering_info)
+{
+    std::vector<VkRenderingAttachmentInfo> color_attachments;
+    for (auto& x : rendering_info.colors)
+    {
+        VkRenderingAttachmentInfo color_attachment = {};
+        color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+        color_attachment.imageView = x.texture->views[x.texture_view];
+        color_attachment.imageLayout = x.texture->layout;
+        color_attachment.loadOp = x.load_op;
+        color_attachment.storeOp = x.store_op;
+        color_attachment.clearValue = x.clear_value;
+        color_attachments.push_back(color_attachment);
+    }
+
+    std::vector<VkRenderingAttachmentInfo> depth_attachments;
+    for (auto& x : rendering_info.depth)
+    {
+        VkRenderingAttachmentInfo depth_attachment = {};
+        depth_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+        depth_attachment.imageView = x.texture->views[x.texture_view];
+        depth_attachment.imageLayout = x.texture->layout;
+        depth_attachment.loadOp = x.load_op;
+        depth_attachment.storeOp = x.store_op;
+        depth_attachment.clearValue = x.clear_value;
+        depth_attachments.push_back(depth_attachment);
+        break;
+    }
+
+    VkRenderingInfo pass_info = {};
+    pass_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+    pass_info.renderArea.extent.width = rendering_info.width;
+    pass_info.renderArea.extent.height = rendering_info.height;
+    pass_info.layerCount = 1;
+    pass_info.colorAttachmentCount = (uint32_t)color_attachments.size();
+    pass_info.pColorAttachments = color_attachments.data();
+    pass_info.pDepthAttachment = depth_attachments.data();
+
+    vkCmdBeginRendering(ctx.cmd, &pass_info);
+}
+
+void ez_end_rendering()
+{
+    vkCmdEndRendering(ctx.cmd);
+}
+
+void ez_bind_scissor(int32_t left, int32_t top, int32_t right, int32_t bottom)
+{
+    VkRect2D scissor;
+    scissor.extent.width = abs(right - left);
+    scissor.extent.height = abs(top - bottom);
+    scissor.offset.x = left;
+    scissor.offset.y = top;
+    vkCmdSetScissor(ctx.cmd, 0, 1, &scissor);
+}
+
+void ez_bind_viewport(float x, float y, float w, float h, float min_depth, float max_depth)
+{
+    VkViewport viewport;
+    viewport.x = x;
+    viewport.y = y;
+    viewport.width = w;
+    viewport.height = h;
+    viewport.minDepth = min_depth;
+    viewport.maxDepth = max_depth;
+    vkCmdSetViewport(ctx.cmd, 0, 1, &viewport);
+}
+
+void ez_bind_vertex_buffer(EzBuffer vertex_buffer, uint64_t offset)
+{
+    vkCmdBindVertexBuffers(ctx.cmd, 0, 1, &vertex_buffer->handle, &offset);
+}
+
+void ez_bind_index_buffer(EzBuffer index_buffer, VkIndexType type, uint64_t offset)
+{
+    vkCmdBindIndexBuffer(ctx.cmd, index_buffer->handle, offset, type);
+}
+
+void ez_bind_srv(uint32_t slot, EzTexture texture, int texture_view)
+{
+
+}
+
+void ez_bind_uav(uint32_t slot, EzTexture texture, int texture_view)
+{
+
+}
+
+void ez_bind_cbv(uint32_t slot, EzBuffer buffer, uint64_t size, uint64_t offset)
+{
+
+}
+
+void ez_bind_sampler(uint32_t slot, EzSampler sampler)
+{
+
+}
+
+void ez_bind_graphics_pipeline(EzGraphicsPipeline pipeline)
+{
+    ctx.graphics_pipeline = pipeline;
+    ctx.compute_pipeline = VK_NULL_HANDLE;
+}
+
+void ez_bind_compute_pipeline(EzComputePipeline pipeline)
+{
+    ctx.compute_pipeline = pipeline;
+    ctx.graphics_pipeline = VK_NULL_HANDLE;
 }
 
 // Barrier
@@ -1097,7 +1310,7 @@ VkBufferMemoryBarrier2 ez_buffer_barrier(VkBuffer buffer,
     return barrier;
 }
 
-void ez_pipeline_barrier(VkCommandBuffer cmd, VkDependencyFlags dependency_flags,
+void ez_pipeline_barrier(VkDependencyFlags dependency_flags,
                       size_t buffer_barrier_count, const VkBufferMemoryBarrier2* buffer_barriers,
                       size_t image_barrier_count, const VkImageMemoryBarrier2* image_barriers)
 {
@@ -1109,5 +1322,5 @@ void ez_pipeline_barrier(VkCommandBuffer cmd, VkDependencyFlags dependency_flags
     dependency_info.imageMemoryBarrierCount = unsigned(image_barrier_count);
     dependency_info.pImageMemoryBarriers = image_barriers;
 
-    vkCmdPipelineBarrier2(cmd, &dependency_info);
+    vkCmdPipelineBarrier2(ctx.cmd, &dependency_info);
 }

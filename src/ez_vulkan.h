@@ -8,6 +8,7 @@
 #include <volk.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <set>
 #include <vector>
 
 #define VK_LOGE(...)                                 \
@@ -133,6 +134,7 @@ struct EzTexture_T
     VkFormat format;
     VkImage handle;
     VkDeviceMemory memory;
+    VkImageLayout layout;
     std::vector<VkImageView> views;
 };
 VK_DEFINE_HANDLE(EzTexture)
@@ -183,7 +185,7 @@ void ez_destroy_sampler(EzSampler sampler);
 struct EzShader_T
 {
     VkShaderModule handle = VK_NULL_HANDLE;
-    VkShaderStageFlagBits stage;
+    VkPipelineShaderStageCreateInfo stage_info = {};
     std::vector<VkPushConstantRange> pushconstants;
     std::vector<VkDescriptorSetLayoutBinding> layout_bindings;
 };
@@ -289,6 +291,52 @@ void ez_create_graphics_pipeline(const EzGraphicsPipelineDesc& desc, EzGraphicsP
 
 void ez_destroy_graphics_pipeline(EzGraphicsPipeline pipeline);
 
+struct EzComputePipeline_T
+{
+};
+VK_DEFINE_HANDLE(EzComputePipeline)
+
+// Funcs
+struct EzRenderingAttachmentInfo
+{
+    EzTexture texture;
+    int texture_view;
+    VkAttachmentLoadOp load_op;
+    VkAttachmentStoreOp store_op;
+    VkClearValue clear_value;
+};
+
+struct EzVkRenderingInfo
+{
+    uint32_t width;
+    uint32_t height;
+    std::vector<EzRenderingAttachmentInfo> depth;
+    std::vector<EzRenderingAttachmentInfo> colors;
+};
+void ez_begin_rendering(const EzVkRenderingInfo& rendering_info);
+
+void ez_end_rendering();
+
+void ez_bind_scissor(int32_t left, int32_t top, int32_t right, int32_t bottom);
+
+void ez_bind_viewport(float x, float y, float w, float h, float min_depth = 0.0f, float max_depth = 1.0f);
+
+void ez_bind_vertex_buffer(EzBuffer vertex_buffer, uint64_t offset = 0);
+
+void ez_bind_index_buffer(EzBuffer index_buffer, VkIndexType type, uint64_t offset = 0);
+
+void ez_bind_srv(uint32_t slot, EzTexture texture, int texture_view);
+
+void ez_bind_uav(uint32_t slot, EzTexture texture, int texture_view);
+
+void ez_bind_cbv(uint32_t slot, EzBuffer buffer, uint64_t size, uint64_t offset = 0);
+
+void ez_bind_sampler(uint32_t slot, EzSampler sampler);
+
+void ez_bind_graphics_pipeline(EzGraphicsPipeline pipeline);
+
+void ez_bind_compute_pipeline(EzComputePipeline pipeline);
+
 // Barrier
 VkImageMemoryBarrier2 ez_image_barrier(VkImage image,
                                     VkPipelineStageFlags2 src_stage_mask, VkAccessFlags2 src_access_mask, VkImageLayout old_layout,
@@ -299,6 +347,6 @@ VkBufferMemoryBarrier2 ez_buffer_barrier(VkBuffer buffer,
                                       VkPipelineStageFlags2 src_stage_mask, VkAccessFlags2 src_access_mask,
                                       VkPipelineStageFlags2 dst_stage_mask, VkAccessFlags2 dst_access_mask);
 
-void ez_pipeline_barrier(VkCommandBuffer cmd, VkDependencyFlags dependency_flags,
+void ez_pipeline_barrier(VkDependencyFlags dependency_flags,
                       size_t buffer_barrier_count, const VkBufferMemoryBarrier2* buffer_barriers,
                       size_t image_barrier_count, const VkImageMemoryBarrier2* image_barriers);
