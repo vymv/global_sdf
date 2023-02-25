@@ -693,6 +693,9 @@ EzSwapchainStatus ez_update_swapchain(EzSwapchain swapchain)
 void ez_acquire_next_image(EzSwapchain swapchain)
 {
     vkAcquireNextImageKHR(ctx.device, swapchain->handle, ~0ull, swapchain->acquire_semaphore, VK_NULL_HANDLE, &swapchain->image_index);
+    swapchain->stage_mask = 0;
+    swapchain->access_mask = 0;
+    swapchain->layout = VK_IMAGE_LAYOUT_UNDEFINED;
     ctx.image_index = swapchain->image_index;
     ctx.acquire_semaphore = swapchain->acquire_semaphore;
 }
@@ -1492,47 +1495,82 @@ void ez_dispatch(uint32_t thread_group_x, uint32_t thread_group_y, uint32_t thre
 }
 
 // Barrier
-VkImageMemoryBarrier2 ez_image_barrier(VkImage image,
-                                    VkPipelineStageFlags2 src_stage_mask, VkAccessFlags2 src_access_mask, VkImageLayout old_layout,
-                                    VkPipelineStageFlags2 dst_stage_mask, VkAccessFlags2 dst_access_mask, VkImageLayout new_layout,
-                                    VkImageAspectFlags aspect_mask)
+VkImageMemoryBarrier2 ez_image_barrier(EzSwapchain swapchain,
+                                       VkPipelineStageFlags2 stage_mask,
+                                       VkAccessFlags2 access_mask,
+                                       VkImageLayout layout,
+                                       VkImageAspectFlags aspect_mask)
 {
     VkImageMemoryBarrier2 barrier = {};
     barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-    barrier.srcStageMask = src_stage_mask;
-    barrier.srcAccessMask = src_access_mask;
-    barrier.dstStageMask = dst_stage_mask;
-    barrier.dstAccessMask = dst_access_mask;
-    barrier.oldLayout = old_layout;
-    barrier.newLayout = new_layout;
+    barrier.srcStageMask = swapchain->stage_mask;
+    barrier.srcAccessMask = swapchain->access_mask;
+    barrier.dstStageMask = stage_mask;
+    barrier.dstAccessMask = access_mask;
+    barrier.oldLayout = swapchain->layout;
+    barrier.newLayout = layout;
     barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.image = image;
+    barrier.image = swapchain->images[swapchain->image_index];
     barrier.subresourceRange.aspectMask = aspect_mask;
     barrier.subresourceRange.baseMipLevel = 0;
     barrier.subresourceRange.baseArrayLayer = 0;
     barrier.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
     barrier.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
 
+    swapchain->stage_mask = stage_mask;
+    swapchain->access_mask = access_mask;
+    swapchain->layout = layout;
     return barrier;
 }
 
-VkBufferMemoryBarrier2 ez_buffer_barrier(VkBuffer buffer,
-                                      VkPipelineStageFlags2 src_stage_mask, VkAccessFlags2 src_access_mask,
-                                      VkPipelineStageFlags2 dst_stage_mask, VkAccessFlags2 dst_access_mask)
+VkImageMemoryBarrier2 ez_image_barrier(EzTexture texture,
+                                       VkPipelineStageFlags2 stage_mask,
+                                       VkAccessFlags2 access_mask,
+                                       VkImageLayout layout,
+                                       VkImageAspectFlags aspect_mask)
+{
+    VkImageMemoryBarrier2 barrier = {};
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    barrier.srcStageMask = texture->stage_mask;
+    barrier.srcAccessMask = texture->access_mask;
+    barrier.dstStageMask = texture->stage_mask;
+    barrier.dstAccessMask = texture->access_mask;
+    barrier.oldLayout = texture->layout;
+    barrier.newLayout = layout;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.image = texture->handle;
+    barrier.subresourceRange.aspectMask = aspect_mask;
+    barrier.subresourceRange.baseMipLevel = 0;
+    barrier.subresourceRange.baseArrayLayer = 0;
+    barrier.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+    barrier.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+
+    texture->stage_mask = stage_mask;
+    texture->access_mask = access_mask;
+    texture->layout = layout;
+    return barrier;
+}
+
+VkBufferMemoryBarrier2 ez_buffer_barrier(EzBuffer buffer,
+                                         VkPipelineStageFlags2 stage_mask,
+                                         VkAccessFlags2 access_mask)
 {
     VkBufferMemoryBarrier2 barrier = {};
     barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
-    barrier.srcStageMask = src_stage_mask;
-    barrier.srcAccessMask = src_access_mask;
-    barrier.dstStageMask = dst_stage_mask;
-    barrier.dstAccessMask = dst_access_mask;
+    barrier.srcStageMask = buffer->stage_mask;
+    barrier.srcAccessMask = buffer->access_mask;
+    barrier.dstStageMask = stage_mask;
+    barrier.dstAccessMask = access_mask;
     barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.buffer = buffer;
+    barrier.buffer = buffer->handle;
     barrier.offset = 0;
     barrier.size = VK_WHOLE_SIZE;
 
+    buffer->stage_mask = stage_mask;
+    buffer->access_mask = access_mask;
     return barrier;
 }
 
