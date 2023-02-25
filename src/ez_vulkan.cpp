@@ -17,12 +17,13 @@ struct Context
     VkQueue queue = VK_NULL_HANDLE;
     VkCommandBuffer cmd = VK_NULL_HANDLE;
     VkCommandPool cmd_pool = VK_NULL_HANDLE;
+    uint32_t max_sets = 256;
+    VkDescriptorPool descriptor_pool = VK_NULL_HANDLE;
     uint32_t image_index = 0;
     VkSwapchainKHR swapchain = VK_NULL_HANDLE;
     VkSemaphore acquire_semaphore = VK_NULL_HANDLE;
     VkSemaphore release_semaphore = VK_NULL_HANDLE;
-    EzGraphicsPipeline graphics_pipeline = VK_NULL_HANDLE;
-    EzComputePipeline compute_pipeline = VK_NULL_HANDLE;
+    EzPipeline pipeline = VK_NULL_HANDLE;
 } ctx;
 
 struct ResourceManager
@@ -32,6 +33,7 @@ struct ResourceManager
     std::deque<std::pair<VkImageView, uint64_t>> destroyer_imageviews;
     std::deque<std::pair<std::pair<VkBuffer, VkDeviceMemory>, uint64_t>> destroyer_buffers;
     std::deque<std::pair<VkSampler, uint64_t>> destroyer_samplers;
+    std::deque<std::pair<VkDescriptorPool, uint64_t>> destroyer_descriptor_pools;
     std::deque<std::pair<VkDescriptorSetLayout, uint64_t>> destroyer_descriptor_set_layouts;
     std::deque<std::pair<VkDescriptorUpdateTemplate, uint64_t>> destroyer_descriptor_update_templates;
     std::deque<std::pair<VkShaderModule, uint64_t>> destroyer_shadermodules;
@@ -90,6 +92,19 @@ void update_res_mgr(uint64_t current_frame_count)
             auto item = res_mgr.destroyer_samplers.front();
             res_mgr.destroyer_samplers.pop_front();
             vkDestroySampler(ctx.device, item.first, nullptr);
+        }
+        else
+        {
+            break;
+        }
+    }
+    while (!res_mgr.destroyer_descriptor_pools.empty())
+    {
+        if (res_mgr.destroyer_descriptor_pools.front().second < res_mgr.frame_count)
+        {
+            auto item = res_mgr.destroyer_descriptor_pools.front();
+            res_mgr.destroyer_descriptor_pools.pop_front();
+            vkDestroyDescriptorPool(ctx.device, item.first, nullptr);
         }
         else
         {
@@ -179,6 +194,85 @@ void clear_stage_buffer_pool()
 {
     if (stage_buffer_pool.current_buffer != VK_NULL_HANDLE)
         ez_destroy_buffer(stage_buffer_pool.current_buffer);
+}
+
+static const uint32_t EZ_CBV_COUNT = 15;
+static const uint32_t EZ_SRV_COUNT = 64;
+static const uint32_t EZ_UAV_COUNT = 16;
+static const uint32_t EZ_SAMPLER_COUNT = 16;
+struct BindingTable
+{
+    bool dirty = false;
+    VkDescriptorSet descriptor_set = VK_NULL_HANDLE;
+    std::vector<VkWriteDescriptorSet> descriptor_writes;
+} binding_table;
+
+void init_descriptor_pool()
+{
+    uint32_t max_sets = ctx.max_sets;
+    VkDescriptorPoolSize pool_sizes[9] = {};
+    uint32_t pool_size_count = 0;
+
+    pool_sizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    pool_sizes[0].descriptorCount = EZ_CBV_COUNT * max_sets;
+    pool_size_count++;
+
+    pool_sizes[1].type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    pool_sizes[1].descriptorCount = EZ_SRV_COUNT * max_sets;
+    pool_size_count++;
+
+    pool_sizes[2].type = VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER;
+    pool_sizes[2].descriptorCount = EZ_SRV_COUNT * max_sets;
+    pool_size_count++;
+
+    pool_sizes[3].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    pool_sizes[3].descriptorCount = EZ_SRV_COUNT * max_sets;
+    pool_size_count++;
+
+    pool_sizes[4].type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    pool_sizes[4].descriptorCount = EZ_UAV_COUNT * max_sets;
+    pool_size_count++;
+
+    pool_sizes[5].type = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER;
+    pool_sizes[5].descriptorCount = EZ_UAV_COUNT * max_sets;
+    pool_size_count++;
+
+    pool_sizes[6].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    pool_sizes[6].descriptorCount = EZ_UAV_COUNT * max_sets;
+    pool_size_count++;
+
+    pool_sizes[7].type = VK_DESCRIPTOR_TYPE_SAMPLER;
+    pool_sizes[7].descriptorCount = EZ_SAMPLER_COUNT * max_sets;
+    pool_size_count++;
+
+    pool_sizes[8].type = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+    pool_sizes[8].descriptorCount = EZ_SRV_COUNT * max_sets;
+    pool_size_count++;
+
+    VkDescriptorPoolCreateInfo pool_create_info = {};
+    pool_create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    pool_create_info.poolSizeCount = pool_size_count;
+    pool_create_info.pPoolSizes = pool_sizes;
+    pool_create_info.maxSets = max_sets;
+    VK_ASSERT(vkCreateDescriptorPool(ctx.device, &pool_create_info, nullptr, &ctx.descriptor_pool));
+}
+
+void destroy_descriptor_pool()
+{
+    res_mgr.destroyer_descriptor_pools.emplace_back(ctx.descriptor_pool, ctx.frame_count);
+    ctx.descriptor_pool = VK_NULL_HANDLE;
+}
+
+void flush_binding_table()
+{
+    if (!binding_table.dirty)
+        return;
+
+    binding_table.dirty = false;
+
+    vkUpdateDescriptorSets(ctx.device, (uint32_t)binding_table.descriptor_writes.size(), binding_table.descriptor_writes.data(), 0, nullptr);
+
+    vkCmdBindDescriptorSets(ctx.cmd, ctx.pipeline->bind_point, ctx.pipeline->pipeline_layout, 0, 1, &binding_table.descriptor_set, 0, nullptr);
 }
 
 #ifdef VK_DEBUG
@@ -409,10 +503,13 @@ void ez_init()
     begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     begin_info.pInheritanceInfo = nullptr;
     VK_ASSERT(vkBeginCommandBuffer(ctx.cmd, &begin_info));
+
+    init_descriptor_pool();
 }
 
 void ez_terminate()
 {
+    destroy_descriptor_pool();
     clear_stage_buffer_pool();
     clear_res_mgr();
 #ifdef VK_DEBUG
@@ -491,7 +588,7 @@ VkDevice ez_device()
     return ctx.device;
 }
 
-void ez_wait_idle()
+void ez_flush()
 {
     vkDeviceWaitIdle(ctx.device);
 }
@@ -930,9 +1027,10 @@ uint32_t GetFormatStride(VkFormat format)
     return 0;
 }
 
-void ez_create_graphics_pipeline(const EzGraphicsPipelineDesc& desc, EzGraphicsPipeline& pipeline)
+void ez_create_graphics_pipeline(const EzGraphicsPipelineDesc& desc, EzPipeline& pipeline)
 {
-    pipeline = new EzGraphicsPipeline_T();
+    pipeline = new EzPipeline_T();
+    pipeline->bind_point = VK_PIPELINE_BIND_POINT_GRAPHICS;
 
     // Pipeline layout
     auto insert_shader = [&](EzShader shader)
@@ -1148,7 +1246,50 @@ void ez_create_graphics_pipeline(const EzGraphicsPipelineDesc& desc, EzGraphicsP
     VK_ASSERT(vkCreateGraphicsPipelines(ctx.device, VK_NULL_HANDLE, 1, &pipeline_info, nullptr, &pipeline->handle));
 }
 
-void ez_destroy_graphics_pipeline(EzGraphicsPipeline pipeline)
+void ez_destroy_graphics_pipeline(EzPipeline pipeline)
+{
+    res_mgr.destroyer_pipelines.emplace_back(pipeline->handle, ctx.frame_count);
+    delete pipeline;
+}
+
+void ez_create_compute_pipeline(EzShader shader, EzPipeline& pipeline)
+{
+    pipeline = new EzPipeline_T();
+    pipeline->bind_point = VK_PIPELINE_BIND_POINT_COMPUTE;
+    pipeline->pushconstants = shader->pushconstants;
+    pipeline->layout_bindings = shader->layout_bindings;
+
+    std::vector<VkDescriptorSetLayout> layouts;
+    VkDescriptorSetLayoutCreateInfo layout_create_info = {};
+    layout_create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    layout_create_info.pBindings = pipeline->layout_bindings.data();
+    layout_create_info.bindingCount = uint32_t(pipeline->layout_bindings.size());
+    VK_ASSERT(vkCreateDescriptorSetLayout(ctx.device, &layout_create_info, nullptr, &pipeline->descriptor_set_layout));
+    layouts.push_back(pipeline->descriptor_set_layout);
+
+    VkPipelineLayoutCreateInfo pipeline_layout_create_info = {};
+    pipeline_layout_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipeline_layout_create_info.pSetLayouts = layouts.data();
+    pipeline_layout_create_info.setLayoutCount = (uint32_t)layouts.size();
+    pipeline_layout_create_info.pushConstantRangeCount = 0;
+    pipeline_layout_create_info.pPushConstantRanges = nullptr;
+    if (!pipeline->pushconstants.empty())
+    {
+        pipeline_layout_create_info.pushConstantRangeCount = (uint32_t)pipeline->pushconstants.size();
+        pipeline_layout_create_info.pPushConstantRanges = pipeline->pushconstants.data();
+    }
+
+    VK_ASSERT(vkCreatePipelineLayout(ctx.device, &pipeline_layout_create_info, nullptr, &pipeline->pipeline_layout));
+
+    VkComputePipelineCreateInfo pipeline_create_info = {};
+    pipeline_create_info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+    pipeline_create_info.layout = pipeline->pipeline_layout;
+    pipeline_create_info.basePipelineHandle = VK_NULL_HANDLE;
+    pipeline_create_info.stage = shader->stage_info;
+    VK_ASSERT(vkCreateComputePipelines(ctx.device, VK_NULL_HANDLE, 1, &pipeline_create_info, nullptr, &pipeline->handle));
+}
+
+void ez_destroy_compute_pipeline(EzPipeline pipeline)
 {
     res_mgr.destroyer_pipelines.emplace_back(pipeline->handle, ctx.frame_count);
     delete pipeline;
@@ -1233,36 +1374,121 @@ void ez_bind_index_buffer(EzBuffer index_buffer, VkIndexType type, uint64_t offs
     vkCmdBindIndexBuffer(ctx.cmd, index_buffer->handle, offset, type);
 }
 
-void ez_bind_srv(uint32_t slot, EzTexture texture, int texture_view)
+void ez_pre_bind_pipeline(EzPipeline pipeline)
 {
+    binding_table.dirty = false;
 
+    VkDescriptorSetAllocateInfo alloc_info = {};
+    alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    alloc_info.descriptorPool = ctx.descriptor_pool;
+    alloc_info.descriptorSetCount = 1;
+    alloc_info.pSetLayouts = &pipeline->descriptor_set_layout;
+
+    VkResult res = vkAllocateDescriptorSets(ctx.device, &alloc_info, &binding_table.descriptor_set);
+    while (res == VK_ERROR_OUT_OF_POOL_MEMORY)
+    {
+        ctx.max_sets *= 2;
+        destroy_descriptor_pool();
+        init_descriptor_pool();
+        alloc_info.descriptorPool = ctx.descriptor_pool;
+        res = vkAllocateDescriptorSets(ctx.device, &alloc_info, &binding_table.descriptor_set);
+    }
+
+    binding_table.descriptor_writes.clear();
 }
 
-void ez_bind_uav(uint32_t slot, EzTexture texture, int texture_view)
+void ez_bind_graphics_pipeline(EzPipeline pipeline)
 {
-
+    ez_pre_bind_pipeline(pipeline);
+    ctx.pipeline = pipeline;
+    vkCmdBindPipeline(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->handle);
 }
 
-void ez_bind_cbv(uint32_t slot, EzBuffer buffer, uint64_t size, uint64_t offset)
+void ez_bind_compute_pipeline(EzPipeline pipeline)
 {
-
+    ez_pre_bind_pipeline(pipeline);
+    ctx.pipeline = pipeline;
+    vkCmdBindPipeline(ctx.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline->handle);
 }
 
-void ez_bind_sampler(uint32_t slot, EzSampler sampler)
+void ez_pre_bind_descriptor(uint32_t binding)
 {
-
+    binding_table.dirty = true;
+    binding_table.descriptor_writes.emplace_back();
+    auto& write = binding_table.descriptor_writes.back();
+    write = {};
+    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write.dstSet = binding_table.descriptor_set;
+    write.dstArrayElement = 0;
+    write.dstBinding = binding;
+    write.descriptorCount = 1;
+    for (auto& x : ctx.pipeline->layout_bindings)
+    {
+        if (x.binding == binding)
+        {
+            write.descriptorType = x.descriptorType;
+            break;
+        }
+    }
 }
 
-void ez_bind_graphics_pipeline(EzGraphicsPipeline pipeline)
+void ez_bind_descriptor(uint32_t binding, EzTexture texture, int texture_view)
 {
-    ctx.graphics_pipeline = pipeline;
-    ctx.compute_pipeline = VK_NULL_HANDLE;
+    ez_pre_bind_descriptor(binding);
+    VkDescriptorImageInfo image_info = {};
+    image_info.imageLayout = texture->layout;
+    image_info.imageView = texture->views[texture_view];
+    auto& write = binding_table.descriptor_writes.back();
+    write.pImageInfo = &image_info;
 }
 
-void ez_bind_compute_pipeline(EzComputePipeline pipeline)
+void ez_bind_descriptor(uint32_t binding, EzBuffer buffer, uint64_t size, uint64_t offset)
 {
-    ctx.compute_pipeline = pipeline;
-    ctx.graphics_pipeline = VK_NULL_HANDLE;
+    ez_pre_bind_descriptor(binding);
+    VkDescriptorBufferInfo buffer_info = {};
+    buffer_info.buffer = buffer->handle;
+    buffer_info.offset = offset;
+    buffer_info.range = size;
+    auto& write = binding_table.descriptor_writes.back();
+    write.pBufferInfo = &buffer_info;
+}
+
+void ez_bind_descriptor(uint32_t binding, EzSampler sampler)
+{
+    ez_pre_bind_descriptor(binding);
+    VkDescriptorImageInfo image_info = {};
+    image_info.sampler = sampler->handle;
+    auto& write = binding_table.descriptor_writes.back();
+    write.pImageInfo = &image_info;
+}
+
+void ez_push_constants(VkShaderStageFlags stages, const void* data, uint32_t size)
+{
+    vkCmdPushConstants(ctx.cmd, ctx.pipeline->pipeline_layout, stages, 0, size, data);
+}
+
+void ez_draw(uint32_t vertex_count, uint32_t vertex_offset)
+{
+    flush_binding_table();
+    vkCmdDraw(ctx.cmd, vertex_count, 1, vertex_offset, 0);
+}
+
+void ez_draw_indexed(uint32_t index_count, uint32_t index_offset, int32_t vertex_offset)
+{
+    flush_binding_table();
+    vkCmdDrawIndexed(ctx.cmd, index_count, 1, index_offset, vertex_offset, 0);
+}
+
+void ez_draw_instanced(uint32_t vertex_count, uint32_t instance_count, uint32_t vertex_offset, uint32_t instance_offset)
+{
+    flush_binding_table();
+    vkCmdDraw(ctx.cmd, vertex_count, instance_count, vertex_offset, instance_offset);
+}
+
+void ez_dispatch(uint32_t thread_group_x, uint32_t thread_group_y, uint32_t thread_group_z)
+{
+    flush_binding_table();
+    vkCmdDispatch(ctx.cmd, thread_group_x, thread_group_y, thread_group_z);
 }
 
 // Barrier

@@ -38,7 +38,7 @@ int main()
         ez_submit();
     }
 
-    ez_wait_idle();
+    ez_flush();
     ez_destroy_swapchain(swapchain);
     ez_terminate();
     glfwDestroyWindow(glfw_window);

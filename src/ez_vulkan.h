@@ -63,7 +63,7 @@ VkCommandBuffer ez_cmd();
 
 VkDevice ez_device();
 
-void ez_wait_idle();
+void ez_flush();
 
 // Swapchain
 struct EzSwapchain_T
@@ -195,15 +195,16 @@ void ez_create_shader(void* data, size_t size, EzShader& shader);
 
 void ez_destroy_shader(EzShader shader);
 
-struct EzGraphicsPipeline_T
+struct EzPipeline_T
 {
+    VkPipelineBindPoint bind_point;
     VkPipeline handle = VK_NULL_HANDLE;
     VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
     VkDescriptorSetLayout descriptor_set_layout = VK_NULL_HANDLE;
     std::vector<VkDescriptorSetLayoutBinding> layout_bindings;
     std::vector<VkPushConstantRange> pushconstants;
 };
-VK_DEFINE_HANDLE(EzGraphicsPipeline)
+VK_DEFINE_HANDLE(EzPipeline)
 
 struct EzInputElement
 {
@@ -287,14 +288,13 @@ struct EzGraphicsPipelineDesc
     EzMultisampleState multisample_state = {};
     EzPipelineRendering pipeline_rendering = {};
 };
-void ez_create_graphics_pipeline(const EzGraphicsPipelineDesc& desc, EzGraphicsPipeline& pipeline);
+void ez_create_graphics_pipeline(const EzGraphicsPipelineDesc& desc, EzPipeline& pipeline);
 
-void ez_destroy_graphics_pipeline(EzGraphicsPipeline pipeline);
+void ez_destroy_graphics_pipeline(EzPipeline pipeline);
 
-struct EzComputePipeline_T
-{
-};
-VK_DEFINE_HANDLE(EzComputePipeline)
+void ez_create_compute_pipeline(EzShader shader, EzPipeline& pipeline);
+
+void ez_destroy_compute_pipeline(EzPipeline pipeline);
 
 // Funcs
 struct EzRenderingAttachmentInfo
@@ -325,17 +325,25 @@ void ez_bind_vertex_buffer(EzBuffer vertex_buffer, uint64_t offset = 0);
 
 void ez_bind_index_buffer(EzBuffer index_buffer, VkIndexType type, uint64_t offset = 0);
 
-void ez_bind_srv(uint32_t slot, EzTexture texture, int texture_view);
+void ez_bind_graphics_pipeline(EzPipeline pipeline);
 
-void ez_bind_uav(uint32_t slot, EzTexture texture, int texture_view);
+void ez_bind_compute_pipeline(EzPipeline pipeline);
 
-void ez_bind_cbv(uint32_t slot, EzBuffer buffer, uint64_t size, uint64_t offset = 0);
+void ez_bind_descriptor(uint32_t binding, EzTexture texture, int texture_view);
 
-void ez_bind_sampler(uint32_t slot, EzSampler sampler);
+void ez_bind_descriptor(uint32_t binding, EzBuffer buffer, uint64_t size, uint64_t offset = 0);
 
-void ez_bind_graphics_pipeline(EzGraphicsPipeline pipeline);
+void ez_bind_descriptor(uint32_t binding, EzSampler sampler);
 
-void ez_bind_compute_pipeline(EzComputePipeline pipeline);
+void ez_push_constants(VkShaderStageFlags stages, const void* data, uint32_t size);
+
+void ez_draw(uint32_t vertex_count, uint32_t vertex_offset);
+
+void ez_draw_indexed(uint32_t index_count, uint32_t index_offset, int32_t vertex_offset);
+
+void ez_draw_instanced(uint32_t vertex_count, uint32_t instance_count, uint32_t vertex_offset, uint32_t instance_offset);
+
+void ez_dispatch(uint32_t thread_group_x, uint32_t thread_group_y, uint32_t thread_group_z);
 
 // Barrier
 VkImageMemoryBarrier2 ez_image_barrier(VkImage image,
