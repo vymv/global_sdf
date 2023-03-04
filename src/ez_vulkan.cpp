@@ -743,6 +743,21 @@ void ez_destroy_buffer(EzBuffer buffer)
     delete buffer;
 }
 
+void ez_map_memory(EzBuffer buffer, uint32_t size, uint32_t offset, void** memory_ptr)
+{
+    vkMapMemory(ctx.device, buffer->memory, offset, size, 0, memory_ptr);
+}
+
+void ez_unmap_memory(EzBuffer buffer)
+{
+    vkUnmapMemory(ctx.device, buffer->memory);
+}
+
+void ez_copy_buffer(EzBuffer src_buffer, EzBuffer dst_buffer, VkBufferCopy range)
+{
+    vkCmdCopyBuffer(ctx.cmd, src_buffer->handle, dst_buffer->handle, 1, &range);
+}
+
 EzAllocation ez_alloc_stage_buffer(size_t size)
 {
     const uint64_t free_space = stage_buffer_pool.size - stage_buffer_pool.offset;
@@ -860,6 +875,11 @@ int ez_create_texture_view(EzTexture texture, VkImageViewType view_type,
 
     texture->views.push_back(image_view);
     return int(texture->views.size()) - 1;
+}
+
+void ez_copy_buffer_to_image(EzBuffer buffer, EzTexture texture, VkBufferImageCopy range)
+{
+    vkCmdCopyBufferToImage(ctx.cmd, buffer->handle, texture->handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &range);
 }
 
 void ez_create_sampler(const EzSamplerDesc& desc, EzSampler& sampler)

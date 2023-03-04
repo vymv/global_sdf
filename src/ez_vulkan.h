@@ -121,6 +121,12 @@ void ez_create_buffer(const EzBufferDesc& desc, EzBuffer& buffer);
 
 void ez_destroy_buffer(EzBuffer buffer);
 
+void ez_map_memory(EzBuffer buffer, uint32_t size, uint32_t offset, void** memory_ptr);
+
+void ez_unmap_memory(EzBuffer buffer);
+
+void ez_copy_buffer(EzBuffer src_buffer, EzBuffer dst_buffer, VkBufferCopy range);
+
 struct EzAllocation
 {
     uint64_t offset = 0;
@@ -166,6 +172,8 @@ void ez_destroy_texture(EzTexture texture);
 int ez_create_texture_view(EzTexture texture, VkImageViewType view_type,
                            uint32_t base_level, uint32_t level_count,
                            uint32_t base_layer, uint32_t layer_count);
+
+void ez_copy_buffer_to_image(EzBuffer buffer, EzTexture texture, VkBufferImageCopy range);
 
 struct EzSampler_T
 {

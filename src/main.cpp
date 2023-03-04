@@ -8,6 +8,7 @@ int main()
     glfwInit();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     GLFWwindow* glfw_window = glfwCreateWindow(800, 600, "gltf_sdf_test", nullptr, nullptr);
+
     ez_init();
     EzSwapchain swapchain = VK_NULL_HANDLE;
     ez_create_swapchain(glfwGetWin32Window(glfw_window), swapchain);
