@@ -21,16 +21,17 @@ struct Mesh
 struct Node
 {
     std::string name;
+    glm::mat4 transform;
     Mesh* mesh = nullptr;
 };
 
-class Scene
+struct Scene
 {
-public:
-    ~Scene();
-
-public:
     std::vector<Node*> nodes;
     std::vector<Mesh*> meshes;
     std::vector<Primitive*> primitives;
 };
+
+Scene* create_scene();
+
+void destroy_scene(Scene* scene);

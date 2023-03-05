@@ -127,6 +127,8 @@ void ez_unmap_memory(EzBuffer buffer);
 
 void ez_copy_buffer(EzBuffer src_buffer, EzBuffer dst_buffer, VkBufferCopy range);
 
+void ez_update_buffer(EzBuffer buffer, uint32_t size, uint32_t offset, void* data);
+
 struct EzAllocation
 {
     uint64_t offset = 0;

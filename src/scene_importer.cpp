@@ -88,22 +88,10 @@ EzBuffer create_vertex_buffer(void* data, uint32_t data_size)
     buffer_desc.memory_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
     ez_create_buffer(buffer_desc, buffer);
 
-    EzAllocation alloc_info = ez_alloc_stage_buffer(data_size);
-    void* memory_ptr = nullptr;
-    ez_map_memory(alloc_info.buffer, data_size, (uint32_t)alloc_info.offset, &memory_ptr);
-    memcpy(memory_ptr, data, data_size);
-    ez_unmap_memory(alloc_info.buffer);
-
-    VkBufferMemoryBarrier2 barrier = ez_buffer_barrier(buffer,
-                                                       VK_PIPELINE_STAGE_TRANSFER_BIT,
-                                                       VK_ACCESS_TRANSFER_WRITE_BIT);
+    VkBufferMemoryBarrier2 barrier = ez_buffer_barrier(buffer,VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT);
     ez_pipeline_barrier(0, 1, &barrier, 0, nullptr);
 
-    VkBufferCopy range = {};
-    range.size = data_size;
-    range.srcOffset = alloc_info.offset;
-    range.dstOffset = 0;
-    ez_copy_buffer(alloc_info.buffer, buffer, range);
+    ez_update_buffer(buffer, data_size, 0, data);
 
     barrier = ez_buffer_barrier(buffer,
                                 VK_PIPELINE_STAGE_VERTEX_INPUT_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
@@ -122,22 +110,12 @@ EzBuffer create_index_buffer(void* data, uint32_t data_size)
     buffer_desc.memory_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
     ez_create_buffer(buffer_desc, buffer);
 
-    EzAllocation alloc_info = ez_alloc_stage_buffer(data_size);
-    void* memory_ptr = nullptr;
-    ez_map_memory(alloc_info.buffer, data_size, (uint32_t)alloc_info.offset, &memory_ptr);
-    memcpy(memory_ptr, data, data_size);
-    ez_unmap_memory(alloc_info.buffer);
-
     VkBufferMemoryBarrier2 barrier = ez_buffer_barrier(buffer,
                                                        VK_PIPELINE_STAGE_TRANSFER_BIT,
                                                        VK_ACCESS_TRANSFER_WRITE_BIT);
     ez_pipeline_barrier(0, 1, &barrier, 0, nullptr);
 
-    VkBufferCopy range = {};
-    range.size = data_size;
-    range.srcOffset = alloc_info.offset;
-    range.dstOffset = 0;
-    ez_copy_buffer(alloc_info.buffer, buffer, range);
+    ez_update_buffer(buffer, data_size, 0, data);
 
     barrier = ez_buffer_barrier(buffer,
                                 VK_PIPELINE_STAGE_VERTEX_INPUT_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
@@ -149,10 +127,10 @@ EzBuffer create_index_buffer(void* data, uint32_t data_size)
 
 Scene* load_scene(const std::string& file_path)
 {
-    Scene* scene = new Scene();
+    Scene* scene = create_scene();
 
     cgltf_options options = {static_cast<cgltf_file_type>(0)};
-    cgltf_data* data = NULL;
+    cgltf_data* data = nullptr;
     if (cgltf_parse_file(&options, file_path.c_str(), &data) != cgltf_result_success)
     {
         cgltf_free(data);
@@ -264,7 +242,16 @@ Scene* load_scene(const std::string& file_path)
     // Load nodes
     for (size_t i = 0; i < data->nodes_count; ++i)
     {
+        Node* node = new Node();
+        scene->nodes.push_back(node);
         cgltf_node* cnode = &data->nodes[i];
+
+        node->name = cnode->name;
+
+        node->transform = get_world_matrix(cnode);
+
+        if (cnode->mesh)
+            node->mesh = mesh_helper[cnode->mesh];
     }
 
     cgltf_free(data);
