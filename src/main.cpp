@@ -1,4 +1,6 @@
 #include "ez_vulkan.h"
+#include "shader_manager.h"
+#include "filesystem.h"
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3.h>
 #include <GLFW/glfw3native.h>
@@ -10,6 +12,7 @@ int main()
     GLFWwindow* glfw_window = glfwCreateWindow(800, 600, "gltf_sdf_test", nullptr, nullptr);
 
     ez_init();
+    ShaderManager::get()->setup(fs_join(PROJECT_DIR, "data", "shaders"));
     EzSwapchain swapchain = VK_NULL_HANDLE;
     ez_create_swapchain(glfwGetWin32Window(glfw_window), swapchain);
 
@@ -40,6 +43,7 @@ int main()
         ez_submit();
     }
 
+    ShaderManager::get()->cleanup();
     ez_flush();
     ez_destroy_swapchain(swapchain);
     ez_terminate();

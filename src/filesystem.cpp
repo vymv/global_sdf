@@ -48,6 +48,16 @@ int fs_load_file(const std::string& path, void** data, uint32_t& size)
     return 0;
 }
 
+std::string fs_join(const std::string& p1, const std::string& p2)
+{
+    return p1 + "/" + p2;
+}
+
+std::string fs_join(const std::string& p1, const std::string& p2, const std::string& p3)
+{
+    return p1 + "/" + p2 + "/" + p3;
+}
+
 std::string fs_filename(const std::string& path)
 {
     size_t pos = path.find_last_of("/");

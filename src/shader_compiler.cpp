@@ -1,7 +1,7 @@
 #include "shader_compiler.h"
 #include "filesystem.h"
 
-void compile_shader_internal(const std::string& file_path, const std::vector<std::string>& macros, void** data, uint32_t& size)
+void ShaderCompiler::compile_internal(const std::string& file_path, const std::vector<std::string>& macros, void** data, uint32_t& size)
 {
     std::string file_name = fs_filename(file_path);
     std::string parent_path = fs_parent_path(file_path);
@@ -29,36 +29,14 @@ void compile_shader_internal(const std::string& file_path, const std::vector<std
     }
 }
 
-void compile_shader(const std::string& file_path, void** data, uint32_t& size)
+
+void ShaderCompiler::compile(const std::string& file_path, void** data, uint32_t& size)
 {
     std::vector<std::string> macros;
-    compile_shader_internal(file_path, macros, data, size);
+    compile_internal(file_path, macros, data, size);
 }
 
-void compile_shader(const std::string& file_path, const std::vector<std::string>& macros, void** data, uint32_t& size)
+void ShaderCompiler::compile(const std::string& file_path, const std::vector<std::string>& macros, void** data, uint32_t& size)
 {
-    compile_shader_internal(file_path, macros, data, size);
-}
-
-void compile_shader(const std::string& file_path, EzShader& shader)
-{
-    void* data;
-    uint32_t size;
-    std::vector<std::string> macros;
-    compile_shader_internal(file_path, macros, &data, size);
-    ez_create_shader(data, size, shader);
-
-    if (data)
-        free(data);
-}
-
-void compile_shader(const std::string& file_path, const std::vector<std::string>& macros, EzShader& shader)
-{
-    void* data;
-    uint32_t size;
-    compile_shader_internal(file_path, macros, &data, size);
-    ez_create_shader(data, size, shader);
-
-    if (data)
-        free(data);
+    compile_internal(file_path, macros, data, size);
 }

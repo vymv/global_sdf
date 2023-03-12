@@ -1,6 +1,6 @@
 #include "renderer.h"
 
-void upload_uniform_buffer(EzBuffer buffer, uint32_t size, uint32_t offset, void* data)
+void update_uniform_buffer(EzBuffer buffer, uint32_t size, uint32_t offset, void* data)
 {
     VkBufferMemoryBarrier2 barrier = ez_buffer_barrier(buffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT);
     ez_pipeline_barrier(0, 1, &barrier, 0, nullptr);

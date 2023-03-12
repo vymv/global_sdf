@@ -2,7 +2,7 @@
 
 #include "ez_vulkan.h"
 
-class Scene;
-class Camera;
+struct Scene;
+struct Camera;
 
-void upload_uniform_buffer(EzBuffer buffer, uint32_t size, uint32_t offset, void* data);
+void update_uniform_buffer(EzBuffer buffer, uint32_t size, uint32_t offset, void* data);
