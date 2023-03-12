@@ -1,15 +1,39 @@
 #include "ez_vulkan.h"
 #include "shader_manager.h"
+#include "input.h"
 #include "filesystem.h"
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3.h>
 #include <GLFW/glfw3native.h>
+
+static void window_size_callback(GLFWwindow* window, int w, int h)
+{
+}
+
+static void cursor_position_callback(GLFWwindow* window, double pos_x, double pos_y)
+{
+    Input::get()->set_mouse_position((float)pos_x, (float)pos_y);
+}
+
+static void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
+{
+    Input::get()->set_mouse_button(button, action);
+}
+
+static void mouse_scroll_callback(GLFWwindow* window, double offset_x, double offset_y)
+{
+    Input::get()->set_mouse_scroll((float)offset_y);
+}
 
 int main()
 {
     glfwInit();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     GLFWwindow* glfw_window = glfwCreateWindow(800, 600, "gltf_sdf_test", nullptr, nullptr);
+    glfwSetFramebufferSizeCallback(glfw_window, window_size_callback);
+    glfwSetCursorPosCallback(glfw_window, cursor_position_callback);
+    glfwSetMouseButtonCallback(glfw_window, mouse_button_callback);
+    glfwSetScrollCallback(glfw_window, mouse_scroll_callback);
 
     ez_init();
     ShaderManager::get()->setup(fs_join(PROJECT_DIR, "data", "shaders"));
@@ -41,6 +65,9 @@ int main()
         ez_present(swapchain);
 
         ez_submit();
+
+        // Reset input
+        Input::get()->reset();
     }
 
     ShaderManager::get()->cleanup();
