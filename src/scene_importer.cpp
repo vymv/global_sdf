@@ -127,7 +127,7 @@ EzBuffer create_index_buffer(void* data, uint32_t data_size)
 
 Scene* load_scene(const std::string& file_path)
 {
-    Scene* scene = create_scene();
+    Scene* scene = new Scene();
 
     cgltf_options options = {static_cast<cgltf_file_type>(0)};
     cgltf_data* data = nullptr;

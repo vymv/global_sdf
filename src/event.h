@@ -27,7 +27,7 @@ public:
         std::function<RetType(Args...)> func;
     };
 
-    EventHandle Bind(std::function<RetType(Args...)> func)
+    EventHandle bind(std::function<RetType(Args...)> func)
     {
         EventData data;
         data.handle = ++_next_handle;
@@ -36,7 +36,7 @@ public:
         return data.handle;
     }
 
-    void Unbind(EventHandle handle)
+    void unbind(EventHandle handle)
     {
         for (typename std::vector<EventData>::iterator iter = _event_datas.begin(); iter != _event_datas.end(); iter++)
         {
@@ -49,7 +49,7 @@ public:
         }
     }
 
-    void Dispatch(Args... args)
+    void dispatch(Args... args)
     {
         if (_event_datas.size() <= 0)
             return;

@@ -25,13 +25,12 @@ struct Node
     Mesh* mesh = nullptr;
 };
 
-struct Scene
+class Scene
 {
+public:
+    ~Scene();
+
     std::vector<Node*> nodes;
     std::vector<Mesh*> meshes;
     std::vector<Primitive*> primitives;
 };
-
-Scene* create_scene();
-
-void destroy_scene(Scene* scene);
