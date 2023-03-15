@@ -34,7 +34,7 @@ private:
 
     Camera* _camera = nullptr;
     bool _grabbing = false;
-    glm::vec2 _start_point;
+    glm::vec2 _start_point{};
     EventHandle _on_mouse_position_handle;
     EventHandle _on_mouse_button_handle;
     EventHandle _on_mouse_scroll_handle;
