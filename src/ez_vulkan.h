@@ -156,14 +156,14 @@ VK_DEFINE_HANDLE(EzTexture)
 
 struct EzTextureDesc
 {
-    uint32_t width;
-    uint32_t height;
-    uint32_t depth;
-    uint32_t levels;
-    uint32_t layers;
-    VkFormat format;
-    VkImageType image_type;
-    VkImageUsageFlags usage;
+    uint32_t width = 1;
+    uint32_t height = 1;
+    uint32_t depth = 1;
+    uint32_t levels = 1;
+    uint32_t layers = 1;
+    VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
+    VkImageType image_type = VK_IMAGE_TYPE_2D;
+    VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT;
     VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT;
     VkMemoryPropertyFlags memory_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 };
@@ -174,6 +174,10 @@ void ez_destroy_texture(EzTexture texture);
 int ez_create_texture_view(EzTexture texture, VkImageViewType view_type,
                            uint32_t base_level, uint32_t level_count,
                            uint32_t base_layer, uint32_t layer_count);
+
+void ez_copy_image(EzTexture src_texture, EzTexture dst_texture, const VkImageCopy& region);
+
+void ez_copy_image(EzTexture src_texture, EzSwapchain dst_swapchain, const VkImageCopy& region);
 
 void ez_copy_buffer_to_image(EzBuffer buffer, EzTexture texture, VkBufferImageCopy range);
 

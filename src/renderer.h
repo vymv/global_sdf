@@ -6,14 +6,12 @@
 class Scene;
 class Camera;
 
-void update_uniform_buffer(EzBuffer buffer, uint32_t size, uint32_t offset, void* data);
-
-struct SceneBufferDesc
+struct SceneElementBufferType
 {
     glm::mat4 transform;
 };
 
-struct ViewBufferDesc
+struct ViewBufferType
 {
     glm::mat4 view_matrix;
     glm::mat4 proj_matrix;

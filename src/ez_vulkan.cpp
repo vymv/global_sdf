@@ -1002,6 +1002,16 @@ int ez_create_texture_view(EzTexture texture, VkImageViewType view_type,
     return int(texture->views.size()) - 1;
 }
 
+void ez_copy_image(EzTexture src_texture, EzTexture dst_texture, const VkImageCopy& region)
+{
+    vkCmdCopyImage(ctx.cmd, src_texture->handle, src_texture->layout, dst_texture->handle, dst_texture->layout, 1, &region);
+}
+
+void ez_copy_image(EzTexture src_texture, EzSwapchain dst_swapchain, const VkImageCopy& region)
+{
+    vkCmdCopyImage(ctx.cmd, src_texture->handle, src_texture->layout, dst_swapchain->images[dst_swapchain->image_index], dst_swapchain->layout, 1, &region);
+}
+
 void ez_copy_buffer_to_image(EzBuffer buffer, EzTexture texture, VkBufferImageCopy range)
 {
     vkCmdCopyBufferToImage(ctx.cmd, buffer->handle, texture->handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &range);
