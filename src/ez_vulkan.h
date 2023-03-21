@@ -268,11 +268,21 @@ struct EzMultisampleState
     VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT;
 };
 
-#define EZ_NUM_VERTEX_ATTRIBS 16
-struct VertexAttribState
+#define EZ_NUM_VERTEX_BUFFERS 4
+#define EZ_NUM_VERTEX_ATTRIBS 8
+struct EzVertexAttrib
 {
-    VkFormat format = VK_FORMAT_UNDEFINED;
+    bool set = false;
+    uint32_t binding = 0;
     uint32_t offset = 0;
+    VkFormat format = VK_FORMAT_UNDEFINED;
+};
+
+struct EzVertexBinding
+{
+    bool set = false;
+    uint32_t vertex_stride = 0;
+    VkVertexInputRate vertex_rate = VK_VERTEX_INPUT_RATE_VERTEX;
 };
 
 struct EzPipelineState
@@ -280,9 +290,8 @@ struct EzPipelineState
     EzShader vertex_shader = VK_NULL_HANDLE;
     EzShader fragment_shader = VK_NULL_HANDLE;
     EzShader compute_shader = VK_NULL_HANDLE;
-    uint32_t vertex_stride = 0;
-    VkVertexInputRate vertex_rate = VK_VERTEX_INPUT_RATE_VERTEX;
-    VertexAttribState attribs[EZ_NUM_VERTEX_ATTRIBS] = {};
+    EzVertexBinding vertex_bindings[EZ_NUM_VERTEX_BUFFERS] = {};
+    EzVertexAttrib vertex_attribs[EZ_NUM_VERTEX_BUFFERS][EZ_NUM_VERTEX_ATTRIBS] = {};
     EzBlendState blend_state = {};
     EzDepthState depth_state = {};
     EzStencilState stencil_state = {};
@@ -297,9 +306,9 @@ void ez_set_pipeline_state(const EzPipelineState& pipeline_state);
 
 void ez_reset_pipeline_state();
 
-void ez_set_vertex_binding(uint32_t stride, VkVertexInputRate rate = VK_VERTEX_INPUT_RATE_VERTEX);
+void ez_set_vertex_binding(uint32_t binding, uint32_t stride, VkVertexInputRate rate = VK_VERTEX_INPUT_RATE_VERTEX);
 
-void ez_set_vertex_attrib(uint32_t location, VkFormat format, uint32_t offset = 0);
+void ez_set_vertex_attrib(uint32_t binding, uint32_t location, VkFormat format, uint32_t offset = 0);
 
 void ez_set_blend_state(const EzBlendState& blend_state);
 
@@ -343,6 +352,8 @@ void ez_set_viewport(float x, float y, float w, float h, float min_depth = 0.0f,
 
 void ez_bind_vertex_buffer(EzBuffer vertex_buffer, uint64_t offset = 0);
 
+void ez_bind_vertex_buffers(uint32_t count, EzBuffer* vertex_buffers, const uint64_t* offsets);
+
 void ez_bind_index_buffer(EzBuffer index_buffer, VkIndexType type, uint64_t offset = 0);
 
 void ez_bind_texture(uint32_t binding, EzTexture texture, int texture_view);
@@ -355,9 +366,11 @@ void ez_push_constants(const void* data, uint32_t size, uint32_t offset);
 
 void ez_draw(uint32_t vertex_count, uint32_t vertex_offset);
 
+void ez_draw(uint32_t vertex_count, uint32_t instance_count, uint32_t vertex_offset, uint32_t instance_offset);
+
 void ez_draw_indexed(uint32_t index_count, uint32_t index_offset, int32_t vertex_offset);
 
-void ez_draw_instanced(uint32_t vertex_count, uint32_t instance_count, uint32_t vertex_offset, uint32_t instance_offset);
+void ez_draw_indexed(uint32_t index_count, uint32_t instance_count, uint32_t index_offset, int32_t vertex_offset, uint32_t instance_offset);
 
 void ez_dispatch(uint32_t thread_group_x, uint32_t thread_group_y, uint32_t thread_group_z);
 
