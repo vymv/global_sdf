@@ -2,6 +2,11 @@
 #include "shader_manager.h"
 #include "input.h"
 #include "filesystem.h"
+#include "scene.h"
+#include "scene_importer.h"
+#include "camera.h"
+#include "camera_controller.h"
+#include "renderer.h"
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3.h>
 #include <GLFW/glfw3native.h>
@@ -40,6 +45,16 @@ int main()
     EzSwapchain swapchain = VK_NULL_HANDLE;
     ez_create_swapchain(glfwGetWin32Window(glfw_window), swapchain);
 
+    Camera* camera = new Camera();
+    camera->set_aspect(800.0f/600.0f);
+    camera->set_translation(glm::vec3(0.0f, 0.0f, 0.0f));
+    CameraController* camera_controller = new CameraController();
+    camera_controller->set_camera(camera);
+    Scene* scene = load_scene(std::string(PROJECT_DIR) + "/data/scenes/test/test.gltf");
+    Renderer* renderer = new Renderer();
+    renderer->set_scene(scene);
+    renderer->set_camera(camera);
+
     while (!glfwWindowShouldClose(glfw_window))
     {
         glfwPollEvents();
@@ -51,9 +66,12 @@ int main()
 
         if (swapchain_status == EzSwapchainStatus::Resized)
         {
+            camera->set_aspect(swapchain->width/swapchain->height);
         }
 
         ez_acquire_next_image(swapchain);
+
+        renderer->render(swapchain);
 
         VkImageMemoryBarrier2 present_barrier = ez_image_barrier(swapchain,
                                                                  0,
@@ -69,6 +87,11 @@ int main()
         // Reset input
         Input::get()->reset();
     }
+
+    delete renderer;
+    delete scene;
+    delete camera;
+    delete camera_controller;
 
     ShaderManager::get()->cleanup();
     ez_flush();

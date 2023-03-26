@@ -6,6 +6,8 @@
 class Camera
 {
 public:
+    Camera();
+
     glm::mat4 get_proj_matrix();
 
     glm::mat4 get_view_matrix();
@@ -36,7 +38,7 @@ private:
     bool _proj_dirty = true;
     bool _transform_dirty = true;
     float _fov = 45.0f;
-    float _near = 0.0f;
+    float _near = 0.1f;
     float _far = 100.0f;
     float _aspect = 1.0f;
     glm::vec3 _translation;

@@ -6,20 +6,26 @@
 class Scene;
 class Camera;
 
-struct SceneElementBufferType
+struct SceneBufferType
 {
     glm::mat4 transform;
+    glm::mat4 pad0;
+    glm::mat4 pad1;
+    glm::mat4 pad2;
 };
 
 struct ViewBufferType
 {
     glm::mat4 view_matrix;
     glm::mat4 proj_matrix;
+    glm::vec4 view_position;
 };
 
 class Renderer
 {
 public:
+    Renderer();
+
     ~Renderer();
 
     void render(EzSwapchain swapchain);
@@ -40,8 +46,10 @@ private:
     Scene* _scene;
     bool _scene_dirty = true;
     Camera* _camera;
-    EzBuffer _scene_buffer;
-    EzBuffer _view_buffer;
-    EzTexture _color_rt;
-    EzTexture _depth_rt;
+    EzBuffer _scene_buffer = VK_NULL_HANDLE;
+    EzBuffer _view_buffer = VK_NULL_HANDLE;
+    EzTexture _color_rt = VK_NULL_HANDLE;
+    EzTexture _depth_rt = VK_NULL_HANDLE;
+    friend class BasePass;
+    BasePass* _base_pass;
 };

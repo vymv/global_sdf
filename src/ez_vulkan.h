@@ -306,6 +306,12 @@ void ez_set_pipeline_state(const EzPipelineState& pipeline_state);
 
 void ez_reset_pipeline_state();
 
+void ez_set_vertex_shader(EzShader shader);
+
+void ez_set_fragment_shader(EzShader shader);
+
+void ez_set_compute_shader(EzShader shader);
+
 void ez_set_vertex_binding(uint32_t binding, uint32_t stride, VkVertexInputRate rate = VK_VERTEX_INPUT_RATE_VERTEX);
 
 void ez_set_vertex_attrib(uint32_t binding, uint32_t location, VkFormat format, uint32_t offset = 0);
@@ -328,11 +334,11 @@ void ez_set_cull_mode(VkCullModeFlags cull_mode);
 
 struct EzRenderingAttachmentInfo
 {
-    EzTexture texture;
-    int texture_view;
-    VkAttachmentLoadOp load_op;
-    VkAttachmentStoreOp store_op;
-    VkClearValue clear_value;
+    EzTexture texture = nullptr;
+    int texture_view = 0;
+    VkAttachmentLoadOp load_op = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    VkAttachmentStoreOp store_op = VK_ATTACHMENT_STORE_OP_STORE;
+    VkClearValue clear_value{};
 };
 
 struct EzRenderingInfo

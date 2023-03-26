@@ -7,7 +7,10 @@
 
 struct Primitive
 {
+    uint32_t vertex_count;
+    uint32_t index_count;
     VkIndexType index_type;
+    VkPrimitiveTopology topology;
     EzBuffer index_buffer;
     EzBuffer vertex_buffer;
 };

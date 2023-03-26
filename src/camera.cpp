@@ -2,6 +2,13 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
 
+Camera::Camera()
+{
+    _translation = glm::vec3(0.0f);
+    _scale = glm::vec3(1.0f);
+    _euler = glm::vec3(0.0f);
+}
+
 glm::mat4 Camera::get_proj_matrix()
 {
     if (_proj_dirty)

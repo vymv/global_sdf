@@ -232,10 +232,6 @@ struct BindingTable
     uint8_t pushconstants_data[128];
     ResourceBinding bindings[EZ_BINDING_COUNT];
     std::vector<VkWriteDescriptorSet> descriptor_writes;
-    std::vector<VkDescriptorBufferInfo> buffer_infos;
-    std::vector<VkDescriptorImageInfo> image_infos;
-    std::vector<VkBufferView> texel_buffer_views;
-    std::vector<VkWriteDescriptorSetAccelerationStructureKHR> acceleration_structure_views;
 } binding_table;
 
 void init_descriptor_pool()
@@ -318,10 +314,6 @@ void flush_binding_table()
     }
 
     binding_table.descriptor_writes.clear();
-    binding_table.buffer_infos.clear();
-    binding_table.image_infos.clear();
-    binding_table.texel_buffer_views.clear();
-    binding_table.acceleration_structure_views.clear();
 
     uint32_t i = 0;
     for (auto& x : ctx.pipeline->layout_bindings)
@@ -352,18 +344,14 @@ void flush_binding_table()
                 case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
                 case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
                 {
-                    binding_table.image_infos.emplace_back();
-                    binding_table.image_infos.back() = binding_table.bindings[unrolled_binding].image;
-                    write.pImageInfo = &binding_table.image_infos.back();
+                    write.pImageInfo = &binding_table.bindings[unrolled_binding].image;
                 }
                 break;
 
                 case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
                 case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
                 {
-                    binding_table.buffer_infos.emplace_back();
-                    binding_table.buffer_infos.back() = binding_table.bindings[unrolled_binding].buffer;
-                    write.pBufferInfo = &binding_table.buffer_infos.back();
+                    write.pBufferInfo = &binding_table.bindings[unrolled_binding].buffer;
                 }
                 break;
 
@@ -618,7 +606,10 @@ void ez_terminate()
 {
     for (auto pipeline_iter : ctx.pipeline_cache)
     {
-        ez_destroy_pipeline(pipeline_iter.second);
+        res_mgr.destroyer_pipelines.emplace_back(pipeline_iter.second->handle, ctx.frame_count);
+        res_mgr.destroyer_pipeline_layouts.emplace_back(pipeline_iter.second->pipeline_layout, ctx.frame_count);
+        res_mgr.destroyer_descriptor_set_layouts.emplace_back(pipeline_iter.second->descriptor_set_layout, ctx.frame_count);
+        delete pipeline_iter.second;
     }
     ctx.pipeline_cache.clear();
     destroy_descriptor_pool();
@@ -684,6 +675,8 @@ void ez_submit()
 
     ctx.frame_count++;
     update_res_mgr(ctx.frame_count);
+
+    ez_reset_pipeline_state();
 
     ctx.swapchain = VK_NULL_HANDLE;
     ctx.acquire_semaphore = VK_NULL_HANDLE;
@@ -835,7 +828,7 @@ void ez_create_buffer(const EzBufferDesc& desc, EzBuffer& buffer)
     VkBufferCreateInfo buffer_create_info = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
     buffer_create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     buffer_create_info.size = desc.size;
-    buffer_create_info.usage = desc.usage;
+    buffer_create_info.usage = desc.usage | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     VK_ASSERT(vkCreateBuffer(ctx.device, &buffer_create_info, nullptr, &buffer->handle));
 
     VkMemoryRequirements memory_requirements;
@@ -940,7 +933,7 @@ void ez_create_texture(const EzTextureDesc& desc, EzTexture& texture)
     image_create_info.queueFamilyIndexCount = 0;
     image_create_info.pQueueFamilyIndices = nullptr;
     image_create_info.flags = 0;
-    image_create_info.usage = desc.usage;
+    image_create_info.usage = desc.usage | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     VK_ASSERT(vkCreateImage(ctx.device, &image_create_info, nullptr, &texture->handle));
 
     VkMemoryRequirements memory_requirements;
@@ -1336,11 +1329,10 @@ void ez_create_graphics_pipeline(const EzPipelineState& pipeline_state, const Ez
     pipeline_info.pMultisampleState = &multisampling;
 
     // Blend
-    uint32_t num_blend_attachments = 0;
-    VkPipelineColorBlendAttachmentState blend_attachments[4] = {};
-    for (uint32_t i = 0; i < 4; ++i)
+    std::vector<VkPipelineColorBlendAttachmentState> blend_attachments{};
+    for (uint32_t i = 0; i < rendering_info.colors.size(); ++i)
     {
-        VkPipelineColorBlendAttachmentState& attachment = blend_attachments[num_blend_attachments];
+        VkPipelineColorBlendAttachmentState attachment{};
         attachment.blendEnable = pipeline_state.blend_state.blend_enable ? VK_TRUE : VK_FALSE;
         attachment.colorWriteMask |= VK_COLOR_COMPONENT_R_BIT;
         attachment.colorWriteMask |= VK_COLOR_COMPONENT_G_BIT;
@@ -1352,15 +1344,15 @@ void ez_create_graphics_pipeline(const EzPipelineState& pipeline_state, const Ez
         attachment.srcAlphaBlendFactor = pipeline_state.blend_state.src_alpha;
         attachment.dstAlphaBlendFactor = pipeline_state.blend_state.dst_alpha;
         attachment.alphaBlendOp = pipeline_state.blend_state.alpha_op;
-        num_blend_attachments++;
+        blend_attachments.push_back(attachment);
     }
 
     VkPipelineColorBlendStateCreateInfo blending_info = {};
     blending_info.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
     blending_info.logicOpEnable = VK_FALSE;
     blending_info.logicOp = VK_LOGIC_OP_COPY;
-    blending_info.attachmentCount = num_blend_attachments;
-    blending_info.pAttachments = blend_attachments;
+    blending_info.attachmentCount = blend_attachments.size();
+    blending_info.pAttachments = blend_attachments.data();
     blending_info.blendConstants[0] = 1.0f;
     blending_info.blendConstants[1] = 1.0f;
     blending_info.blendConstants[2] = 1.0f;
@@ -1499,6 +1491,10 @@ std::size_t ez_get_compute_pipeline_hash(const EzPipelineState& pipeline_state)
 std::size_t ez_get_graphics_pipeline_hash(const EzPipelineState& pipeline_state, const EzRenderingInfo& rendering_info)
 {
     std::size_t hash = 0;
+
+    hash_combine(hash, pipeline_state.vertex_shader);
+    hash_combine(hash, pipeline_state.fragment_shader);
+
     for (uint32_t i = 0; i < EZ_NUM_VERTEX_BUFFERS; i++)
     {
         hash_combine(hash, pipeline_state.vertex_bindings[i].set);
@@ -1638,6 +1634,22 @@ void ez_set_pipeline_state(const EzPipelineState& pipeline_state)
 void ez_reset_pipeline_state()
 {
     ctx.pipeline_state = {};
+    ctx.pipeline = VK_NULL_HANDLE;
+}
+
+void ez_set_vertex_shader(EzShader shader)
+{
+    ctx.pipeline_state.vertex_shader = shader;
+}
+
+void ez_set_fragment_shader(EzShader shader)
+{
+    ctx.pipeline_state.fragment_shader = shader;
+}
+
+void ez_set_compute_shader(EzShader shader)
+{
+    ctx.pipeline_state.compute_shader = shader;
 }
 
 void ez_set_vertex_binding(uint32_t binding, uint32_t stride, VkVertexInputRate rate)
