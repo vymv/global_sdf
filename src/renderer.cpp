@@ -2,10 +2,12 @@
 #include "camera.h"
 #include "scene.h"
 #include "base_pass.h"
+#include "global_sdf_pass.h"
 
 Renderer::Renderer()
 {
     _base_pass = new BasePass(this);
+    _global_sdf_pass = new GlobalSignDistanceFieldPass(this);
 
     EzBufferDesc buffer_desc{};
     buffer_desc.size = sizeof(ViewBufferType);
@@ -17,6 +19,7 @@ Renderer::Renderer()
 Renderer::~Renderer()
 {
     delete _base_pass;
+    delete _global_sdf_pass;
 
     if (_scene_buffer)
         ez_destroy_buffer(_scene_buffer);
@@ -132,6 +135,7 @@ void Renderer::render(EzSwapchain swapchain)
 
     // Render passes
     _base_pass->render();
+    _global_sdf_pass->render();
 
     // Copy to swapchain
     VkImageMemoryBarrier2 copy_barriers[] = {

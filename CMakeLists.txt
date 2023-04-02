@@ -15,11 +15,9 @@ target_link_libraries(gltf_sdf_test PUBLIC gltf_sdf)
 add_subdirectory(extern/glfw EXCLUDE_FROM_ALL glfw.out)
 target_link_libraries(gltf_sdf_test PRIVATE glfw)
 
-# glm
-add_subdirectory(extern/glm)
-target_compile_definitions(glm INTERFACE GLM_ENABLE_EXPERIMENTAL=1)
-target_compile_definitions(glm INTERFACE GLM_FORCE_DEPTH_ZERO_TO_ONE=1)
-target_link_libraries(gltf_sdf_test PUBLIC glm)
+# spark
+add_subdirectory(extern/spark)
+target_link_libraries(gltf_sdf_test PUBLIC spark)
 
 # spirv_reflect
 add_library(spirv_reflect STATIC extern/spirv_reflect/spirv_reflect.c extern/spirv_reflect/spirv_reflect.h)

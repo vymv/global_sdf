@@ -129,12 +129,12 @@ void ez_copy_buffer(EzBuffer src_buffer, EzBuffer dst_buffer, VkBufferCopy range
 
 void ez_update_buffer(EzBuffer buffer, uint32_t size, uint32_t offset, void* data);
 
-struct EzAllocation
+struct EzStageAllocation
 {
     uint64_t offset = 0;
     EzBuffer buffer = VK_NULL_HANDLE;
 };
-EzAllocation ez_alloc_stage_buffer(size_t size);
+EzStageAllocation ez_alloc_stage_buffer(size_t size);
 
 // Texture
 struct EzTexture_T

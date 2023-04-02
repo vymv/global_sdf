@@ -52,4 +52,6 @@ private:
     EzTexture _depth_rt = VK_NULL_HANDLE;
     friend class BasePass;
     BasePass* _base_pass;
+    friend class GlobalSignDistanceFieldPass;
+    GlobalSignDistanceFieldPass* _global_sdf_pass;
 };

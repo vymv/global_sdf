@@ -865,7 +865,7 @@ void ez_copy_buffer(EzBuffer src_buffer, EzBuffer dst_buffer, VkBufferCopy range
 
 void ez_update_buffer(EzBuffer buffer, uint32_t size, uint32_t offset, void* data)
 {
-    EzAllocation alloc_info = ez_alloc_stage_buffer(size);
+    EzStageAllocation alloc_info = ez_alloc_stage_buffer(size);
     void* memory_ptr = nullptr;
     ez_map_memory(alloc_info.buffer, size, (uint32_t)alloc_info.offset, &memory_ptr);
     memcpy(memory_ptr, data, size);
@@ -878,7 +878,7 @@ void ez_update_buffer(EzBuffer buffer, uint32_t size, uint32_t offset, void* dat
     ez_copy_buffer(alloc_info.buffer, buffer, range);
 }
 
-EzAllocation ez_alloc_stage_buffer(size_t size)
+EzStageAllocation ez_alloc_stage_buffer(size_t size)
 {
     const uint64_t free_space = stage_buffer_pool.size - stage_buffer_pool.offset;
     if (size > free_space || stage_buffer_pool.current_buffer == VK_NULL_HANDLE)
@@ -898,7 +898,7 @@ EzAllocation ez_alloc_stage_buffer(size_t size)
         ez_create_buffer(buffer_desc, stage_buffer_pool.current_buffer);
     }
 
-    EzAllocation allocation;
+    EzStageAllocation allocation;
     allocation.buffer = stage_buffer_pool.current_buffer;
     allocation.offset = stage_buffer_pool.offset;
     stage_buffer_pool.offset += ez_align_to(size, 8);
