@@ -217,11 +217,8 @@ static const uint32_t EZ_SAMPLER_COUNT = 16;
 static const uint32_t EZ_BINDING_COUNT = 32;
 struct ResourceBinding
 {
-    union
-    {
-        VkDescriptorBufferInfo buffer;
-        VkDescriptorImageInfo image;
-    };
+    VkDescriptorBufferInfo buffer;
+    std::vector<VkDescriptorImageInfo> images;
     VkDeviceSize dynamic_offset;
 };
 
@@ -336,7 +333,7 @@ void flush_binding_table()
             write.dstArrayElement = descriptor_index;
             write.descriptorType = x.descriptorType;
             write.dstBinding = x.binding;
-            write.descriptorCount = 1;
+            write.descriptorCount = x.descriptorCount;
 
             switch (x.descriptorType)
             {
@@ -344,7 +341,7 @@ void flush_binding_table()
                 case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
                 case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
                 {
-                    write.pImageInfo = &binding_table.bindings[unrolled_binding].image;
+                    write.pImageInfo = binding_table.bindings[unrolled_binding].images.data();
                 }
                 break;
 
@@ -369,6 +366,7 @@ void flush_binding_table()
 void ez_create_compute_pipeline(const EzPipelineState& pipeline_state, EzPipeline& pipeline);
 void ez_create_graphics_pipeline(const EzPipelineState& pipeline_state, const EzRenderingInfo& rendering_info, EzPipeline& pipeline);
 void ez_destroy_pipeline(EzPipeline pipeline);
+uint32_t ez_get_format_stride(VkFormat format);
 
 #ifdef VK_DEBUG
 VKAPI_ATTR VkBool32 VKAPI_CALL debug_utils_messenger_cb(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
@@ -954,7 +952,7 @@ void ez_destroy_texture(EzTexture texture)
     res_mgr.destroyer_images.emplace_back(std::make_pair(texture->handle, texture->memory), ctx.frame_count);
     for (auto view : texture->views)
     {
-        res_mgr.destroyer_imageviews.emplace_back(view, ctx.frame_count);
+        res_mgr.destroyer_imageviews.emplace_back(view.handle, ctx.frame_count);
     }
     delete texture;
 }
@@ -991,7 +989,10 @@ int ez_create_texture_view(EzTexture texture, VkImageViewType view_type,
     VkImageView image_view;
     VK_ASSERT(vkCreateImageView(ctx.device, &view_create_info, nullptr, &image_view));
 
-    texture->views.push_back(image_view);
+    EzTextureInternalView internal_view{};
+    internal_view.handle = image_view;
+    internal_view.subresource_range = view_create_info.subresourceRange;
+    texture->views.push_back(internal_view);
     return int(texture->views.size()) - 1;
 }
 
@@ -1008,6 +1009,25 @@ void ez_copy_image(EzTexture src_texture, EzSwapchain dst_swapchain, const VkIma
 void ez_copy_buffer_to_image(EzBuffer buffer, EzTexture texture, VkBufferImageCopy range)
 {
     vkCmdCopyBufferToImage(ctx.cmd, buffer->handle, texture->handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &range);
+}
+
+void ez_clear_color_image(EzTexture texture, int texture_view, float c[4])
+{
+    vkCmdClearColorImage(ctx.cmd, texture->handle, texture->layout, (const VkClearColorValue*)c, 1, &texture->views[texture_view].subresource_range);
+}
+
+void ez_update_image(EzTexture texture, VkBufferImageCopy range, void* data)
+{
+    uint32_t data_size = ez_get_format_stride(texture->format) * range.imageExtent.width * range.imageExtent.height * range.imageExtent.depth;
+    EzStageAllocation alloc_info = ez_alloc_stage_buffer(data_size);
+
+    void* memory_ptr = nullptr;
+    ez_map_memory(alloc_info.buffer, data_size, (uint32_t)alloc_info.offset, &memory_ptr);
+    memcpy(memory_ptr, data, data_size);
+    ez_unmap_memory(alloc_info.buffer);
+
+    range.bufferOffset = alloc_info.offset;
+    ez_copy_buffer_to_image(alloc_info.buffer, texture, range);
 }
 
 void ez_create_sampler(const EzSamplerDesc& desc, EzSampler& sampler)
@@ -1110,7 +1130,7 @@ void ez_destroy_shader(EzShader shader)
     delete shader;
 }
 
-uint32_t get_format_stride(VkFormat format)
+uint32_t ez_get_format_stride(VkFormat format)
 {
     switch (format)
     {
@@ -1714,7 +1734,7 @@ void ez_begin_rendering(const EzRenderingInfo& rendering_info)
     {
         VkRenderingAttachmentInfo color_attachment = {};
         color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-        color_attachment.imageView = x.texture->views[x.texture_view];
+        color_attachment.imageView = x.texture->views[x.texture_view].handle;
         color_attachment.imageLayout = x.texture->layout;
         color_attachment.loadOp = x.load_op;
         color_attachment.storeOp = x.store_op;
@@ -1727,7 +1747,7 @@ void ez_begin_rendering(const EzRenderingInfo& rendering_info)
     {
         VkRenderingAttachmentInfo depth_attachment = {};
         depth_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-        depth_attachment.imageView = x.texture->views[x.texture_view];
+        depth_attachment.imageView = x.texture->views[x.texture_view].handle;
         depth_attachment.imageLayout = x.texture->layout;
         depth_attachment.loadOp = x.load_op;
         depth_attachment.storeOp = x.store_op;
@@ -1800,8 +1820,23 @@ void ez_bind_index_buffer(EzBuffer index_buffer, VkIndexType type, uint64_t offs
 void ez_bind_texture(uint32_t binding, EzTexture texture, int texture_view)
 {
     binding_table.dirty = true;
-    binding_table.bindings[binding].image.imageView = texture->views[texture_view];
-    binding_table.bindings[binding].image.imageLayout = texture->layout;
+    for (auto i = binding_table.bindings[binding].images.size(); i < 1; ++i)
+    {
+        binding_table.bindings[binding].images.emplace_back();
+    }
+    binding_table.bindings[binding].images[0].imageView = texture->views[texture_view].handle;
+    binding_table.bindings[binding].images[0].imageLayout = texture->layout;
+}
+
+void ez_bind_texture_array(uint32_t binding, EzTexture texture, int texture_view, int array_idx)
+{
+    binding_table.dirty = true;
+    for (auto i = binding_table.bindings[binding].images.size(); i < array_idx + 1; ++i)
+    {
+        binding_table.bindings[binding].images.emplace_back();
+    }
+    binding_table.bindings[binding].images[array_idx].imageView = texture->views[texture_view].handle;
+    binding_table.bindings[binding].images[array_idx].imageLayout = texture->layout;
 }
 
 void ez_bind_buffer(uint32_t binding, EzBuffer buffer, uint64_t size, uint64_t offset)
@@ -1815,7 +1850,11 @@ void ez_bind_buffer(uint32_t binding, EzBuffer buffer, uint64_t size, uint64_t o
 void ez_bind_sampler(uint32_t binding, EzSampler sampler)
 {
     binding_table.dirty = true;
-    binding_table.bindings[binding].image.sampler = sampler->handle;
+    for (auto i = binding_table.bindings[binding].images.size(); i < 1; ++i)
+    {
+        binding_table.bindings[binding].images.emplace_back();
+    }
+    binding_table.bindings[binding].images[0].sampler = sampler->handle;
 }
 
 void ez_push_constants(const void* data, uint32_t size, uint32_t offset)
@@ -1932,6 +1971,174 @@ VkBufferMemoryBarrier2 ez_buffer_barrier(EzBuffer buffer,
     buffer->stage_mask = stage_mask;
     buffer->access_mask = access_mask;
     return barrier;
+}
+
+VkImageAspectFlags ez_get_aspect_mask(VkFormat format)
+{
+    VkImageAspectFlags result = 0;
+    switch (format)
+    {
+        case VK_FORMAT_D16_UNORM:
+        case VK_FORMAT_X8_D24_UNORM_PACK32:
+        case VK_FORMAT_D32_SFLOAT:
+            result = VK_IMAGE_ASPECT_DEPTH_BIT;
+            break;
+        case VK_FORMAT_S8_UINT:
+            result = VK_IMAGE_ASPECT_STENCIL_BIT;
+            break;
+        case VK_FORMAT_D16_UNORM_S8_UINT:
+        case VK_FORMAT_D24_UNORM_S8_UINT:
+        case VK_FORMAT_D32_SFLOAT_S8_UINT:
+            result = VK_IMAGE_ASPECT_DEPTH_BIT;
+            result |= VK_IMAGE_ASPECT_STENCIL_BIT;
+            break;
+        default:
+            result = VK_IMAGE_ASPECT_COLOR_BIT;
+            break;
+    }
+    return result;
+}
+
+VkAccessFlags ez_get_access_flags(EzResourceState state)
+{
+    VkAccessFlags ret = 0;
+    if (state & EZ_RESOURCE_STATE_COPY_SOURCE)
+    {
+        ret |= VK_ACCESS_TRANSFER_READ_BIT;
+    }
+    if (state & EZ_RESOURCE_STATE_COPY_DEST)
+    {
+        ret |= VK_ACCESS_TRANSFER_WRITE_BIT;
+    }
+    if (state & EZ_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER)
+    {
+        ret |= VK_ACCESS_UNIFORM_READ_BIT | VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
+    }
+    if (state & EZ_RESOURCE_STATE_INDEX_BUFFER)
+    {
+        ret |= VK_ACCESS_INDEX_READ_BIT;
+    }
+    if (state & EZ_RESOURCE_STATE_UNORDERED_ACCESS)
+    {
+        ret |= VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+    }
+    if (state & EZ_RESOURCE_STATE_INDIRECT_ARGUMENT)
+    {
+        ret |= VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
+    }
+    if (state & EZ_RESOURCE_STATE_RENDERTARGET)
+    {
+        ret |= VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    }
+    if (state & EZ_RESOURCE_STATE_DEPTH_WRITE)
+    {
+        ret |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    }
+    if ((state & EZ_RESOURCE_STATE_SHADER_RESOURCE) || (state & EZ_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE))
+    {
+        ret |= VK_ACCESS_SHADER_READ_BIT;
+    }
+    if (state & EZ_RESOURCE_STATE_PRESENT)
+    {
+        ret |= VK_ACCESS_MEMORY_READ_BIT;
+    }
+
+    return ret;
+}
+
+VkImageLayout ez_get_image_layout(EzResourceState state)
+{
+    if (state & EZ_RESOURCE_STATE_COPY_SOURCE)
+        return VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+
+    if (state & EZ_RESOURCE_STATE_COPY_DEST)
+        return VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+
+    if (state & EZ_RESOURCE_STATE_RENDERTARGET)
+        return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+    if (state & EZ_RESOURCE_STATE_DEPTH_WRITE)
+        return VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+    if (state & EZ_RESOURCE_STATE_UNORDERED_ACCESS)
+        return VK_IMAGE_LAYOUT_GENERAL;
+
+    if ((state & EZ_RESOURCE_STATE_SHADER_RESOURCE) || (state & EZ_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE))
+        return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    if (state & EZ_RESOURCE_STATE_PRESENT)
+        return VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+    if (state == EZ_RESOURCE_STATE_COMMON)
+        return VK_IMAGE_LAYOUT_GENERAL;
+
+    return VK_IMAGE_LAYOUT_UNDEFINED;
+}
+
+VkPipelineStageFlags ez_get_pipeline_stage_flags(VkAccessFlags access_flags)
+{
+    VkPipelineStageFlags flags = 0;
+
+    if ((access_flags & (VK_ACCESS_INDEX_READ_BIT | VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT)) != 0)
+        flags |= VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
+
+    if ((access_flags & (VK_ACCESS_UNIFORM_READ_BIT | VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT)) != 0)
+    {
+        flags |= VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
+        flags |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        flags |= VK_PIPELINE_STAGE_GEOMETRY_SHADER_BIT;
+        flags |= VK_PIPELINE_STAGE_TESSELLATION_CONTROL_SHADER_BIT;
+        flags |= VK_PIPELINE_STAGE_TESSELLATION_EVALUATION_SHADER_BIT;
+        flags |= VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+    }
+
+    if ((access_flags & VK_ACCESS_INPUT_ATTACHMENT_READ_BIT) != 0)
+        flags |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+
+    if ((access_flags & (VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)) != 0)
+        flags |= VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+    if ((access_flags & (VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT)) != 0)
+        flags |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+
+    if ((access_flags & VK_ACCESS_INDIRECT_COMMAND_READ_BIT) != 0)
+        flags |= VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT;
+
+    if ((access_flags & (VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT)) != 0)
+        flags |= VK_PIPELINE_STAGE_TRANSFER_BIT;
+
+    if ((access_flags & (VK_ACCESS_HOST_READ_BIT | VK_ACCESS_HOST_WRITE_BIT)) != 0)
+        flags |= VK_PIPELINE_STAGE_HOST_BIT;
+
+    if (flags == 0)
+        flags = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+
+    return flags;
+}
+
+VkImageMemoryBarrier2 ez_image_barrier(EzSwapchain swapchain, EzResourceState resource_state)
+{
+    VkImageAspectFlags aspect_mask = VK_IMAGE_ASPECT_COLOR_BIT;
+    VkImageLayout image_layout = ez_get_image_layout(resource_state);
+    VkAccessFlags access_flags = ez_get_access_flags(resource_state);
+    VkPipelineStageFlags pipeline_stage_flags = ez_get_pipeline_stage_flags(access_flags);
+    return ez_image_barrier(swapchain, pipeline_stage_flags, access_flags,image_layout, aspect_mask);
+}
+
+VkImageMemoryBarrier2 ez_image_barrier(EzTexture texture, EzResourceState resource_state)
+{
+    VkImageAspectFlags aspect_mask = ez_get_aspect_mask(texture->format);
+    VkImageLayout image_layout = ez_get_image_layout(resource_state);
+    VkAccessFlags access_flags = ez_get_access_flags(resource_state);
+    VkPipelineStageFlags pipeline_stage_flags = ez_get_pipeline_stage_flags(access_flags);
+    return ez_image_barrier(texture, pipeline_stage_flags, access_flags,image_layout, aspect_mask);
+}
+
+VkBufferMemoryBarrier2 ez_buffer_barrier(EzBuffer buffer, EzResourceState resource_state)
+{
+    VkAccessFlags access_flags = ez_get_access_flags(resource_state);
+    VkPipelineStageFlags pipeline_stage_flags = ez_get_pipeline_stage_flags(access_flags);
+    return ez_buffer_barrier(buffer, pipeline_stage_flags, access_flags);
 }
 
 void ez_pipeline_barrier(VkDependencyFlags dependency_flags,

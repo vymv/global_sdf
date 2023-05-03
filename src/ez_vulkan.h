@@ -42,6 +42,30 @@
         }                                                            \
     } while (0)
 
+#ifdef __cplusplus
+#ifndef EZ_MAKE_ENUM_FLAG
+#define EZ_MAKE_ENUM_FLAG(TYPE, ENUM_TYPE)                          \
+    static inline ENUM_TYPE operator|(ENUM_TYPE a, ENUM_TYPE b)     \
+    {                                                               \
+        return (ENUM_TYPE)((TYPE)(a) | (TYPE)(b));                  \
+    }                                                               \
+    static inline ENUM_TYPE operator&(ENUM_TYPE a, ENUM_TYPE b)     \
+    {                                                               \
+        return (ENUM_TYPE)((TYPE)(a) & (TYPE)(b));                  \
+    }                                                               \
+    static inline ENUM_TYPE operator|=(ENUM_TYPE& a, ENUM_TYPE b)   \
+    {                                                               \
+        return a = (a | b);                                         \
+    }                                                               \
+    static inline ENUM_TYPE operator&=(ENUM_TYPE& a, ENUM_TYPE b)   \
+    {                                                               \
+        return a = (a & b);                                         \
+    }
+#endif
+#else
+#define EZ_MAKE_ENUM_FLAG(TYPE, ENUM_TYPE)
+#endif
+
 inline constexpr uint32_t ez_align_to(uint32_t value, uint32_t alignment)
 {
     return ((value + alignment - 1) / alignment) * alignment;
@@ -137,6 +161,14 @@ struct EzStageAllocation
 EzStageAllocation ez_alloc_stage_buffer(size_t size);
 
 // Texture
+typedef int EzTextureView;
+
+struct EzTextureInternalView
+{
+    VkImageView handle;
+    VkImageSubresourceRange subresource_range;
+};
+
 struct EzTexture_T
 {
     uint32_t width;
@@ -150,7 +182,7 @@ struct EzTexture_T
     VkAccessFlags2 access_mask = 0;
     VkPipelineStageFlags2 stage_mask = 0;
     VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
-    std::vector<VkImageView> views;
+    std::vector<EzTextureInternalView> views;
 };
 VK_DEFINE_HANDLE(EzTexture)
 
@@ -180,6 +212,10 @@ void ez_copy_image(EzTexture src_texture, EzTexture dst_texture, const VkImageCo
 void ez_copy_image(EzTexture src_texture, EzSwapchain dst_swapchain, const VkImageCopy& region);
 
 void ez_copy_buffer_to_image(EzBuffer buffer, EzTexture texture, VkBufferImageCopy range);
+
+void ez_clear_color_image(EzTexture texture, int texture_view, float c[4]);
+
+void ez_update_image(EzTexture texture, VkBufferImageCopy range, void* data);
 
 struct EzSampler_T
 {
@@ -364,6 +400,8 @@ void ez_bind_index_buffer(EzBuffer index_buffer, VkIndexType type, uint64_t offs
 
 void ez_bind_texture(uint32_t binding, EzTexture texture, int texture_view);
 
+void ez_bind_texture_array(uint32_t binding, EzTexture texture, int texture_view, int array_idx);
+
 void ez_bind_buffer(uint32_t binding, EzBuffer buffer, uint64_t size, uint64_t offset = 0);
 
 void ez_bind_sampler(uint32_t binding, EzSampler sampler);
@@ -396,6 +434,34 @@ VkImageMemoryBarrier2 ez_image_barrier(EzTexture texture,
 VkBufferMemoryBarrier2 ez_buffer_barrier(EzBuffer buffer,
                                         VkPipelineStageFlags2 stage_mask,
                                         VkAccessFlags2 access_mask);
+
+enum EzResourceState
+{
+    EZ_RESOURCE_STATE_UNDEFINED = 0,
+    EZ_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER = 0x1,
+    EZ_RESOURCE_STATE_INDEX_BUFFER = 0x2,
+    EZ_RESOURCE_STATE_RENDERTARGET = 0x4,
+    EZ_RESOURCE_STATE_UNORDERED_ACCESS = 0x8,
+    EZ_RESOURCE_STATE_DEPTH_WRITE = 0x10,
+    EZ_RESOURCE_STATE_DEPTH_READ = 0x20,
+    EZ_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE = 0x40,
+    EZ_RESOURCE_STATE_SHADER_RESOURCE = 0x40 | 0x80,
+    EZ_RESOURCE_STATE_STREAM_OUT = 0x100,
+    EZ_RESOURCE_STATE_INDIRECT_ARGUMENT = 0x200,
+    EZ_RESOURCE_STATE_COPY_DEST = 0x400,
+    EZ_RESOURCE_STATE_COPY_SOURCE = 0x800,
+    EZ_RESOURCE_STATE_GENERIC_READ = (((((0x1 | 0x2) | 0x40) | 0x80) | 0x200) | 0x800),
+    EZ_RESOURCE_STATE_PRESENT = 0x1000,
+    EZ_RESOURCE_STATE_COMMON = 0x2000,
+    EZ_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE = 0x4000,
+};
+EZ_MAKE_ENUM_FLAG(uint32_t, EzResourceState)
+
+VkImageMemoryBarrier2 ez_image_barrier(EzSwapchain swapchain, EzResourceState resource_state);
+
+VkImageMemoryBarrier2 ez_image_barrier(EzTexture texture, EzResourceState resource_state);
+
+VkBufferMemoryBarrier2 ez_buffer_barrier(EzBuffer buffer, EzResourceState resource_state);
 
 void ez_pipeline_barrier(VkDependencyFlags dependency_flags,
                          size_t buffer_barrier_count,
