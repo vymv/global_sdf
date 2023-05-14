@@ -1,0 +1,93 @@
+#version 450
+#extension GL_ARB_separate_shader_objects : enable
+
+#define GLOBAL_SDF_RESOLUTION 128
+#define GLOBAL_SDF_BRICK_SIZE 32
+#define GLOBAL_SDF_MAX_OBJECT_COUNT 16
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 8) in;
+
+layout(binding = 0, r16f) uniform image3D global_sdf_texture;
+layout(binding = 1) uniform texture3D object_textures[GLOBAL_SDF_MAX_OBJECT_COUNT];
+layout(binding = 2) uniform sampler sdf_sampler;
+
+struct ObjectData
+{
+    mat4 world_to_volume;
+    mat4 volume_to_world;
+    vec3 volume_to_uvw_mul;
+    float pad0;
+    vec3 volume_to_uvw_add;
+    float pad1;
+    vec3 volume_bounds_size;
+    float pad2;
+};
+
+layout(std140, binding = 3) buffer ObjectsBuffer
+{
+    ObjectData object_datas[];
+};
+
+layout(std140, binding = 4) buffer UploadParams
+{
+    ivec3 brick_coord;
+    float max_distance;
+    vec3 coord_to_pos_mul;
+    float pad0;
+    vec3 coord_to_pos_add;
+    uint object_count;
+    uvec4 objects[GLOBAL_SDF_MAX_OBJECT_COUNT / 4];
+};
+
+float combine_distance_to_sdf(float sdf, float distance)
+{
+    if (sdf <= 0.0 && distance <= 0.0) return sdf;
+
+    return sqrt(pow(max(sdf, 0), 2) + pow(distance, 2));
+}
+
+float distance_to_object_sdf(float min_distance, ObjectData data, texture3D sdf_texture, vec3 world_pos)
+{
+    vec3 volume_to_world_scale = vec3(length(data.volume_to_world[0]), length(data.volume_to_world[1]), length(data.volume_to_world[2]));
+    float volume_scale = min(volume_to_world_scale.x, min(volume_to_world_scale.y, volume_to_world_scale.z));
+
+    // Compute ditance to volume
+    vec3 volume_pos = (data.world_to_volume * vec4(world_pos, 1.0)).xyz;
+    vec3 volume_uv = volume_pos * data.volume_to_uvw_mul + data.volume_to_uvw_add;
+    vec3 volume_pos_clamped = clamp(volume_pos, -data.volume_bounds_size, data.volume_bounds_size);
+    vec3 world_pos_clamped = (data.volume_to_world * vec4(volume_pos_clamped, 1.0)).xyz;
+    float distance_to_volume = distance(world_pos, world_pos_clamped);
+    if (distance_to_volume < 0.01)
+        distance_to_volume = length((volume_pos - volume_pos_clamped) * volume_to_world_scale);
+    distance_to_volume = max(distance_to_volume, 0);
+
+    if (min_distance <= distance_to_volume) return distance_to_volume;
+
+    // Sample sdf
+    float sdf_distance = textureLod(sampler3D(sdf_texture, sdf_sampler), volume_uv, 0.0).r;
+    sdf_distance *= volume_scale;
+
+    // Combine distance
+    float result = combine_distance_to_sdf(sdf_distance, distance_to_volume);
+    if (distance_to_volume > 0)
+    {
+        result = max(distance_to_volume, result);
+    }
+    return result;
+}
+
+void main()
+{
+    ivec3 voxel_coord = brick_coord + ivec3(gl_GlobalInvocationID);
+    vec3 voxel_world_pos = voxel_coord * coord_to_pos_mul + coord_to_pos_add;
+    float min_distance = max_distance;
+    for (uint i = 0; i < object_count; i++)
+    {
+        uint object_idx = objects[i / 4][i % 4];
+        ObjectData object_data = object_datas[object_idx];
+        float object_distance = distance_to_object_sdf(min_distance, object_data, object_textures[object_idx], voxel_world_pos);
+        min_distance = min(min_distance, object_distance);
+    }
+    float distance = clamp(min_distance / max_distance, -1.0, 1.0);
+    imageStore(global_sdf_texture, voxel_coord, vec4(distance));
+}

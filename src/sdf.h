@@ -1,12 +1,14 @@
 #pragma once
 
 #include <glm/glm.hpp>
+#include <math/bounding_box.h>
 #include "ez_vulkan.h"
 
 struct SDF
 {
-    float max_distance;
-    glm::vec3 uvw_to_local_mul;
-    glm::vec3 uvw_to_local_add;
+    BoundingBox bounds;
+    uint32_t resolution;
+    glm::vec3 local_to_uvw_mul;
+    glm::vec3 local_to_uvw_add;
     EzTexture texture;
 };

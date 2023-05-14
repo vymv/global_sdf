@@ -18,6 +18,10 @@ public:
 
     void set_near_far(float near, float far);
 
+    float get_near() const { return _near; }
+
+    float get_far() const { return _far; }
+
     void set_aspect(float aspect);
 
     void set_translation(const glm::vec3& translation);

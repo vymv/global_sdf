@@ -4,16 +4,16 @@
 SDF* generate_sdf(const BoundingBox& bounds, uint32_t resolution, uint32_t vertex_count, float* vertices, uint32_t index_count, uint32_t* indices)
 {
     SDF* sdf = new SDF();
+    sdf->bounds = bounds;
+    sdf->resolution = resolution;
     float max_distance = bounds.get_max_extent();
     glm::vec3 bounds_size = bounds.get_size();
     glm::vec3 uvw_to_local_mul = bounds_size;
     glm::vec3 uvw_to_local_add = bounds.bb_min;
     glm::vec3 xyz_to_local_mul = uvw_to_local_mul / glm::vec3((float)(resolution - 1));
     glm::vec3 xyz_to_local_add = uvw_to_local_add;
-    sdf->max_distance = max_distance;
-    sdf->uvw_to_local_mul = uvw_to_local_mul;
-    sdf->uvw_to_local_add = uvw_to_local_add;
-
+    sdf->local_to_uvw_mul = 1.0f / uvw_to_local_mul;
+    sdf->local_to_uvw_add = -uvw_to_local_add / uvw_to_local_mul;
     uint32_t voxel_data_size = resolution * resolution * resolution * sizeof(float);
     float* voxel_data = (float*)malloc(voxel_data_size);
     uint32_t sample_count = 6;
@@ -99,7 +99,8 @@ SDF* generate_sdf(const BoundingBox& bounds, uint32_t resolution, uint32_t verte
     texture_desc.width = resolution;
     texture_desc.height = resolution;
     texture_desc.depth = resolution;
-    texture_desc.format = VK_FORMAT_R32_SFLOAT;
+    texture_desc.format = VK_FORMAT_R16_SFLOAT;
+    texture_desc.image_type = VK_IMAGE_TYPE_3D;
     texture_desc.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
     ez_create_texture(texture_desc, sdf->texture);
     ez_create_texture_view(sdf->texture, VK_IMAGE_VIEW_TYPE_3D, 0, 1, 0, 1);
@@ -108,9 +109,7 @@ SDF* generate_sdf(const BoundingBox& bounds, uint32_t resolution, uint32_t verte
                                                      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
     ez_pipeline_barrier(0, 0, nullptr, 1, &barrier);
 
-    EzStageAllocation alloc = ez_alloc_stage_buffer(voxel_data_size);
     VkBufferImageCopy range{};
-    range.bufferOffset = alloc.offset;
     range.imageExtent.width = resolution;
     range.imageExtent.height = resolution;
     range.imageExtent.depth = resolution;
@@ -118,10 +117,9 @@ SDF* generate_sdf(const BoundingBox& bounds, uint32_t resolution, uint32_t verte
     range.imageSubresource.mipLevel = 0;
     range.imageSubresource.baseArrayLayer = 0;
     range.imageSubresource.layerCount = 1;
-    ez_copy_buffer_to_image(alloc.buffer, sdf->texture, range);
+    ez_update_image(sdf->texture, range, voxel_data);
 
-    barrier = ez_image_barrier(sdf->texture, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT,
-                               VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
+    barrier = ez_image_barrier(sdf->texture, EZ_RESOURCE_STATE_SHADER_RESOURCE);
     ez_pipeline_barrier(0, 0, nullptr, 1, &barrier);
     free(voxel_data);
     return sdf;

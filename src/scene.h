@@ -1,12 +1,16 @@
 #pragma once
 
+#include "ez_vulkan.h"
+#include "sdf.h"
 #include <string>
 #include <vector>
 #include <glm/glm.hpp>
-#include "ez_vulkan.h"
+#include <math/bounding_box.h>
 
 struct Primitive
 {
+    SDF* sdf;
+    BoundingBox bounds;
     uint32_t vertex_count;
     uint32_t index_count;
     VkIndexType index_type;

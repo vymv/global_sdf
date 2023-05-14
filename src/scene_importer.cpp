@@ -1,5 +1,6 @@
 #include "scene_importer.h"
 #include "scene.h"
+#include "sdf_generator.h"
 #include "ez_vulkan.h"
 #include <cgltf.h>
 #include <gltf_sdf.h>
@@ -214,6 +215,8 @@ Scene* load_scene(const std::string& file_path)
             position_data_size = position_attribute_size * vertex_count;
             vertex_buffer_offset += position_attribute_size;
             vertex_buffer_size += position_data_size;
+            float* minp = &position_accessor->min[0];
+            float* maxp = &position_accessor->max[0];
 
             cgltf_attribute* normal_attribute = get_gltf_attribute(cprimitive, cgltf_attribute_type_normal);
             cgltf_accessor* normal_accessor = normal_attribute->data;
@@ -262,6 +265,14 @@ Scene* load_scene(const std::string& file_path)
             }
             primitive->index_count = index_count;
             primitive->index_buffer = create_index_buffer(index_data, index_data_size);
+
+            // Bounds
+            primitive->bounds.merge(glm::vec3(minp[0], minp[1], minp[2]));
+            primitive->bounds.merge(glm::vec3(maxp[0], maxp[1], maxp[2]));
+            primitive->bounds.grow(0.02f);
+
+            // SDF
+            primitive->sdf = generate_sdf(primitive->bounds, 32, vertex_count, (float*)position_data, index_count, (uint32_t*)index_data);
         }
     }
 
