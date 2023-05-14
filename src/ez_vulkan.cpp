@@ -321,40 +321,37 @@ void flush_binding_table()
             continue;
         }
 
-        for (uint32_t descriptor_index = 0; descriptor_index < x.descriptorCount; ++descriptor_index)
+        uint32_t binding = x.binding;
+
+        binding_table.descriptor_writes.emplace_back();
+        auto& write = binding_table.descriptor_writes.back();
+        write = {};
+        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write.dstSet = descriptor_set;
+        write.dstArrayElement = 0;
+        write.descriptorType = x.descriptorType;
+        write.dstBinding = x.binding;
+        write.descriptorCount = x.descriptorCount;
+
+        switch (x.descriptorType)
         {
-            uint32_t unrolled_binding = x.binding + descriptor_index;
-
-            binding_table.descriptor_writes.emplace_back();
-            auto& write = binding_table.descriptor_writes.back();
-            write = {};
-            write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            write.dstSet = descriptor_set;
-            write.dstArrayElement = descriptor_index;
-            write.descriptorType = x.descriptorType;
-            write.dstBinding = x.binding;
-            write.descriptorCount = x.descriptorCount;
-
-            switch (x.descriptorType)
+            case VK_DESCRIPTOR_TYPE_SAMPLER:
+            case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+            case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
             {
-                case VK_DESCRIPTOR_TYPE_SAMPLER:
-                case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
-                case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
-                {
-                    write.pImageInfo = binding_table.bindings[unrolled_binding].images.data();
-                }
-                break;
-
-                case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
-                case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
-                {
-                    write.pBufferInfo = &binding_table.bindings[unrolled_binding].buffer;
-                }
-                break;
-
-                default:
-                    break;
+                write.pImageInfo = binding_table.bindings[binding].images.data();
             }
+            break;
+
+            case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+            case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
+            {
+                write.pBufferInfo = &binding_table.bindings[binding].buffer;
+            }
+            break;
+
+            default:
+                break;
         }
     }
 
