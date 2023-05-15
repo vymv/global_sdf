@@ -1,5 +1,6 @@
 #include "ez_vulkan.h"
 #include "shader_manager.h"
+#include "geometry_manager.h"
 #include "input.h"
 #include "filesystem.h"
 #include "scene.h"
@@ -41,6 +42,7 @@ int main()
     glfwSetScrollCallback(glfw_window, mouse_scroll_callback);
 
     ez_init();
+    GeometryManager::get()->setup();
     ShaderManager::get()->setup(fs_join(PROJECT_DIR, "data", "shaders"));
     EzSwapchain swapchain = VK_NULL_HANDLE;
     ez_create_swapchain(glfwGetWin32Window(glfw_window), swapchain);
@@ -94,6 +96,7 @@ int main()
     delete camera_controller;
 
     ShaderManager::get()->cleanup();
+    GeometryManager::get()->cleanup();
     ez_flush();
     ez_destroy_swapchain(swapchain);
     ez_terminate();
