@@ -15,7 +15,7 @@ class Renderer;
 class GlobalSignDistanceFieldPass
 {
 public:
-    GlobalSignDistanceFieldPass(Renderer* renderer);
+    explicit GlobalSignDistanceFieldPass(Renderer* renderer);
 
     ~GlobalSignDistanceFieldPass();
 
@@ -23,12 +23,27 @@ public:
 
     void render();
 
+    EzTexture get_global_sdf_texture() { return _global_sdf_texture; }
+
+    EzBuffer get_global_sdf_buffer() { return _global_sdf_buffer; }
+
+    EzSampler get_sampler() { return _sampler; }
+
 private:
     Renderer* _renderer;
+    bool _scene_dirty{};
+    float _view_distance{};
+    glm::vec3 _view_center{};
     EzTexture _global_sdf_texture = VK_NULL_HANDLE;
-    bool _scene_dirty;
-    float _view_distance;
-    glm::vec3 _view_center;
+
+    struct GlobalSignDistanceFieldData
+    {
+        glm::vec4 bounds_position_distance;
+        float voxel_size;
+        float resolution;
+    };
+    GlobalSignDistanceFieldData _global_sdf_data;
+    EzBuffer _global_sdf_buffer;
 
     struct ObjectData
     {
@@ -38,7 +53,7 @@ private:
         float pad0;
         glm::vec3 volume_to_uvw_add;
         float pad1;
-        glm::vec3 volume_bounds_size;
+        glm::vec3 volume_bounds_extent;
         float pad2;
     };
     std::vector<ObjectData> _object_datas;

@@ -1,7 +1,7 @@
 #include "sdf_generator.h"
 #include <math/detection.h>
 
-SDF* generate_sdf(const BoundingBox& bounds, uint32_t resolution, uint32_t vertex_count, float* vertices, uint32_t index_count, uint32_t* indices)
+SDF* generate_sdf(const BoundingBox& bounds, uint32_t resolution, uint32_t vertex_count, float* vertices, uint32_t index_count, uint8_t* indices, VkIndexType index_type)
 {
     SDF* sdf = new SDF();
     sdf->bounds = bounds;
@@ -26,6 +26,17 @@ SDF* generate_sdf(const BoundingBox& bounds, uint32_t resolution, uint32_t verte
         glm::vec3(0.0f, 0.0f, -1.0f)    // Backward
     };
 
+    uint32_t* indices_32;
+    uint16_t* indices_16;
+    if (index_type == VK_INDEX_TYPE_UINT32)
+    {
+        indices_32 = (uint32_t*)indices;
+    }
+    else
+    {
+        indices_16 = (uint16_t*)indices;
+    }
+
     for (int x = 0; x < resolution; ++x)
     {
         for (int y = 0; y < resolution; ++y)
@@ -38,11 +49,27 @@ SDF* generate_sdf(const BoundingBox& bounds, uint32_t resolution, uint32_t verte
                 float hit_distance = INF;
                 glm::vec3 hit_position;
                 glm::vec3 hit_normal;
+                int idx0;
+                int idx1;
+                int idx2;
                 for (int i = 0; i < index_count; i += 3)
                 {
-                    glm::vec3 v0(vertices[i * 3], vertices[i * 3 + 1], vertices[i * 3 + 2]);
-                    glm::vec3 v1(vertices[i * 6], vertices[i * 6 + 1], vertices[i * 6 + 2]);
-                    glm::vec3 v2(vertices[i * 9], vertices[i * 9 + 1], vertices[i * 9 + 2]);
+                    if (index_type == VK_INDEX_TYPE_UINT32)
+                    {
+                        idx0 = (int)indices_32[i];
+                        idx1 = (int)indices_32[i + 1];
+                        idx2 = (int)indices_32[i + 2];
+                    }
+                    else
+                    {
+                        idx0 = (int)indices_16[i];
+                        idx1 = (int)indices_16[i + 1];
+                        idx2 = (int)indices_16[i + 2];
+                    }
+
+                    glm::vec3 v0(vertices[idx0 * 3], vertices[idx0 * 3 + 1], vertices[idx0 * 3 + 2]);
+                    glm::vec3 v1(vertices[idx1 * 3], vertices[idx1 * 3 + 1], vertices[idx1 * 3 + 2]);
+                    glm::vec3 v2(vertices[idx2 * 3], vertices[idx2 * 3 + 1], vertices[idx2 * 3 + 2]);
                     glm::vec3 p = closest_point_on_triangle(voxel_pos, v0, v1, v2);
                     float distance = glm::distance(p, voxel_pos);
                     if (hit_distance >= distance)
@@ -64,17 +91,33 @@ SDF* generate_sdf(const BoundingBox& bounds, uint32_t resolution, uint32_t verte
                     hit_distance = INF;
                     glm::vec3 ro = voxel_pos;
                     glm::vec3 rd = sample_directions[sample];
+
                     for (int i = 0; i < index_count; i += 3)
                     {
-                        glm::vec3 v0(vertices[i * 3], vertices[i * 3 + 1], vertices[i * 3 + 2]);
-                        glm::vec3 v1(vertices[i * 6], vertices[i * 6 + 1], vertices[i * 6 + 2]);
-                        glm::vec3 v2(vertices[i * 9], vertices[i * 9 + 1], vertices[i * 9 + 2]);
+                        if (index_type == VK_INDEX_TYPE_UINT32)
+                        {
+                            idx0 = (int)indices_32[i];
+                            idx1 = (int)indices_32[i + 1];
+                            idx2 = (int)indices_32[i + 2];
+                        }
+                        else
+                        {
+                            idx0 = (int)indices_16[i];
+                            idx1 = (int)indices_16[i + 1];
+                            idx2 = (int)indices_16[i + 2];
+                        }
+
+                        glm::vec3 v0(vertices[idx0 * 3], vertices[idx0 * 3 + 1], vertices[idx0 * 3 + 2]);
+                        glm::vec3 v1(vertices[idx1 * 3], vertices[idx1 * 3 + 1], vertices[idx1 * 3 + 2]);
+                        glm::vec3 v2(vertices[idx2 * 3], vertices[idx2 * 3 + 1], vertices[idx2 * 3 + 2]);
+
                         if (ray_intersect_triangle(ro, rd, v0, v1, v2, hit_distance))
                         {
                             hit = true;
                             hit_normal = glm::normalize(glm::cross(v1 - v0, v2 - v0));
                         }
                     }
+
                     if (hit)
                     {
                         hit_count++;
@@ -83,7 +126,7 @@ SDF* generate_sdf(const BoundingBox& bounds, uint32_t resolution, uint32_t verte
                     }
                 }
 
-                if ((float)hit_back_count > (float)sample_count * 0.5f && hit_count != 0)
+                if ((float)hit_back_count > (float)sample_count * 0.2f && hit_count != 0)
                 {
                     min_distance *= -1;
                 }
@@ -99,7 +142,7 @@ SDF* generate_sdf(const BoundingBox& bounds, uint32_t resolution, uint32_t verte
     texture_desc.width = resolution;
     texture_desc.height = resolution;
     texture_desc.depth = resolution;
-    texture_desc.format = VK_FORMAT_R16_SFLOAT;
+    texture_desc.format = VK_FORMAT_R32_SFLOAT;
     texture_desc.image_type = VK_IMAGE_TYPE_3D;
     texture_desc.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
     ez_create_texture(texture_desc, sdf->texture);

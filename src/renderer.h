@@ -54,4 +54,6 @@ private:
     BasePass* _base_pass;
     friend class GlobalSignDistanceFieldPass;
     GlobalSignDistanceFieldPass* _global_sdf_pass;
+    friend class VisualizeSignDistanceFieldPass;
+    VisualizeSignDistanceFieldPass* _visualize_sdf_pass;
 };

@@ -1,9 +1,6 @@
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
 
-#define GLOBAL_SDF_RESOLUTION 128
-#define GLOBAL_SDF_BRICK_SIZE 32
-
 layout(location = 0) in vec2 in_texcoord;
 layout(location = 0) out vec4 out_color;
 
@@ -17,7 +14,7 @@ layout(std140, binding = 2) uniform GlobalSignDistanceFieldData
     float resolution;
 } global_sdf_data;
 
-layout(std140, set = 0, binding = 2) uniform ViewBuffer
+layout(std140, set = 0, binding = 3) uniform ViewBuffer
 {
     mat4 view_matrix;
     mat4 proj_matrix;
@@ -58,7 +55,7 @@ vec3 get_global_sdf_uv(vec3 world_position)
 {
     float max_distance = global_sdf_data.bounds_position_distance.w * 2.0;
     vec3 position_in_bounds = world_position - global_sdf_data.bounds_position_distance.xyz;
-    return clamp(position_in_bounds / max_distance, vec3(0.0), vec3(1.0));
+    return clamp(position_in_bounds / max_distance + 0.5, vec3(0.0), vec3(1.0));
 }
 
 HitResult ray_trace(Ray ray)
@@ -69,18 +66,18 @@ HitResult ray_trace(Ray ray)
     float bounds_distance = global_sdf_data.bounds_position_distance.w;
     vec3 bounds_position = global_sdf_data.bounds_position_distance.xyz;
     float max_distance = bounds_distance * 2.0;
-    float voxel_size = max_distance / GLOBAL_SDF_RESOLUTION;
+    float voxel_size = max_distance / global_sdf_data.resolution;
     vec3 end_position = ray.world_position + ray.world_direction * max_distance;
-    vec3 world_position = ray.world_direction;
+    vec3 world_position = ray.world_position;
     vec2 intersections = line_hit_box(world_position, end_position, bounds_position - bounds_distance, bounds_position + bounds_distance);
     intersections *= max_distance;
     if (intersections.x >= intersections.y)
         return hit;
 
     float step_time = intersections.x;
-    for (float step = 0.0; step < GLOBAL_SDF_RESOLUTION; ++step)
+    for (float step = 0.0; step < global_sdf_data.resolution; ++step)
     {
-        if (step_time <= intersections.y)
+        if (step_time > intersections.y)
         {
             hit.step_count = step;
             break;
@@ -88,8 +85,8 @@ HitResult ray_trace(Ray ray)
 
         vec3 step_position = world_position + ray.world_direction * step_time;
         vec3 uv = get_global_sdf_uv(step_position);
-        float sdf_distance = textureLod(sampler3D(global_sdf_texture, sdf_sampler), uv, 0.0).r;
-        float min_surface_thickness = 0.5f;
+        float sdf_distance = textureLod(sampler3D(global_sdf_texture, sdf_sampler), uv, 0.0).r * max_distance;
+        float min_surface_thickness = 0.1;
         if (sdf_distance < min_surface_thickness)
         {
             hit.hit_time = max(step_time + sdf_distance - min_surface_thickness, 0.0);
@@ -111,9 +108,9 @@ void main()
     target_position = target_position / target_position.w;
 
     Ray ray;
-    ray.world_position = view_buffer.view_position;
+    ray.world_position = view_buffer.view_position.xyz;
     ray.world_direction = normalize(target_position.xyz - view_buffer.view_position.xyz);
     HitResult hit = ray_trace(ray);
 
-    out_color = vec4(vec3(hit.step_count / GLOBAL_SDF_RESOLUTION), 1.0);
+    out_color = vec4(vec3(hit.step_count / global_sdf_data.resolution), 1.0);
 }

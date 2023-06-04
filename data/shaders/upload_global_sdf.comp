@@ -19,7 +19,7 @@ struct ObjectData
     float pad0;
     vec3 volume_to_uvw_add;
     float pad1;
-    vec3 volume_bounds_size;
+    vec3 volume_bounds_extent;
     float pad2;
 };
 
@@ -54,9 +54,10 @@ float distance_to_object_sdf(float min_distance, ObjectData data, texture3D sdf_
     // Compute ditance to volume
     vec3 volume_pos = (data.world_to_volume * vec4(world_pos, 1.0)).xyz;
     vec3 volume_uv = volume_pos * data.volume_to_uvw_mul + data.volume_to_uvw_add;
-    vec3 volume_pos_clamped = clamp(volume_pos, -data.volume_bounds_size, data.volume_bounds_size);
+    vec3 volume_pos_clamped = clamp(volume_pos, -data.volume_bounds_extent, data.volume_bounds_extent);
     vec3 world_pos_clamped = (data.volume_to_world * vec4(volume_pos_clamped, 1.0)).xyz;
     float distance_to_volume = distance(world_pos, world_pos_clamped);
+
     if (distance_to_volume < 0.01)
         distance_to_volume = length((volume_pos - volume_pos_clamped) * volume_to_world_scale);
     distance_to_volume = max(distance_to_volume, 0);
@@ -78,7 +79,7 @@ float distance_to_object_sdf(float min_distance, ObjectData data, texture3D sdf_
 
 void main()
 {
-    ivec3 voxel_coord = brick_coord + ivec3(gl_GlobalInvocationID);
+    ivec3 voxel_coord = brick_coord * ivec3(GLOBAL_SDF_BRICK_SIZE)  + ivec3(gl_GlobalInvocationID);
     vec3 voxel_world_pos = voxel_coord * coord_to_pos_mul + coord_to_pos_add;
     float min_distance = max_distance;
     for (uint i = 0; i < object_count; i++)

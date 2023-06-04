@@ -5,6 +5,28 @@
 #include "shader_manager.h"
 #include <math/bounding_box.h>
 
+glm::vec3 transform_point(const glm::vec3& point, const glm::mat4& mat)
+{
+    glm::vec4 p0 = glm::vec4(point.x, point.y, point.z, 1.0f);
+    glm::vec4 p1 = mat * p0;
+    return glm::vec3(p1.x, p1.y, p1.z) / p1.w;
+}
+
+BoundingBox get_bounds(const BoundingBox& bounds, const glm::mat4& world)
+{
+    glm::vec3 bb_min = glm::vec3(INF, INF, INF);
+    glm::vec3 bb_max = glm::vec3(NEG_INF, NEG_INF, NEG_INF);
+    glm::vec3 corners[8];
+    bounds.get_corners(corners);
+    for (int i = 0; i < 8; i++)
+    {
+        glm::vec3 p = transform_point(corners[i], world);
+        bb_min = glm::min(bb_min, p);
+        bb_max = glm::max(bb_max, p);
+    }
+    return BoundingBox(bb_min, bb_max);
+}
+
 GlobalSignDistanceFieldPass::GlobalSignDistanceFieldPass(Renderer* renderer)
 {
     _renderer = renderer;
@@ -29,6 +51,12 @@ GlobalSignDistanceFieldPass::GlobalSignDistanceFieldPass(Renderer* renderer)
     sampler_desc.address_v = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
     sampler_desc.address_w = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
     ez_create_sampler(sampler_desc, _sampler);
+
+    EzBufferDesc buffer_desc{};
+    buffer_desc.size = sizeof(GlobalSignDistanceFieldData);
+    buffer_desc.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+    buffer_desc.memory_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    ez_create_buffer(buffer_desc, _global_sdf_buffer);
 }
 
 GlobalSignDistanceFieldPass::~GlobalSignDistanceFieldPass()
@@ -39,6 +67,8 @@ GlobalSignDistanceFieldPass::~GlobalSignDistanceFieldPass()
         ez_destroy_texture(_empty_texture);
     if (_sampler)
         ez_destroy_sampler(_sampler);
+    if (_global_sdf_buffer)
+        ez_destroy_buffer(_global_sdf_buffer);
     if (_upload_params_buffer)
         ez_destroy_buffer(_upload_params_buffer);
     if (_objects_buffer)
@@ -60,9 +90,9 @@ void GlobalSignDistanceFieldPass::make_scene_dirty()
 void GlobalSignDistanceFieldPass::render()
 {
     bool need_upload = false;
-    float camera_distance = _renderer->_camera->get_far();
+    float camera_distance = 10.0f;//_renderer->_camera->get_far();
     glm::vec3 camera_center = _renderer->_camera->get_translation();
-    if (_view_distance != camera_distance || glm::distance(_view_center, camera_center) >= camera_distance * 0.4f)
+    if (_scene_dirty || _view_distance != camera_distance || glm::distance(_view_center, camera_center) >= camera_distance * 0.1)
     {
         _view_distance = camera_distance;
         _view_center = camera_center;
@@ -72,6 +102,7 @@ void GlobalSignDistanceFieldPass::render()
     BoundingBox view_bounds(_view_center - _view_distance, _view_center + _view_distance);
     float voxel_size = (_view_distance * 2.0f) / (float)GLOBAL_SDF_RESOLUTION;
     float brick_size = voxel_size * GLOBAL_SDF_BRICK_SIZE;
+
     if (_scene_dirty)
     {
         _bricks.clear();
@@ -84,6 +115,8 @@ void GlobalSignDistanceFieldPass::render()
                 for (auto prim : node->mesh->primitives)
                 {
                     BoundingBox volume_bounds = prim->sdf->bounds;
+                    volume_bounds = get_bounds(volume_bounds, node->transform);
+
                     BoundingBox object_bounds = volume_bounds;
                     object_bounds.bb_min = glm::clamp(volume_bounds.bb_min, view_bounds.bb_min, view_bounds.bb_max);
                     object_bounds.bb_min = object_bounds.bb_min - view_bounds.bb_min;
@@ -105,7 +138,7 @@ void GlobalSignDistanceFieldPass::render()
                     obj_data.volume_to_world = volume_to_world;
                     obj_data.volume_to_uvw_mul = volume_to_uvw_mul;
                     obj_data.volume_to_uvw_add = volume_to_uvw_add;
-                    obj_data.volume_bounds_size = volume_bounds.get_size();
+                    obj_data.volume_bounds_extent = volume_bounds_half_size;
                     _object_datas.push_back(obj_data);
                     _object_textures.push_back(prim->sdf->texture);
 
@@ -175,18 +208,25 @@ void GlobalSignDistanceFieldPass::render()
             ez_create_buffer(buffer_desc, _upload_params_buffer);
         }
 
-        VkBufferMemoryBarrier2 buffer_barriers[2] = {
+        _global_sdf_data.bounds_position_distance = glm::vec4(_view_center, _view_distance);
+        _global_sdf_data.voxel_size = voxel_size;
+        _global_sdf_data.resolution = GLOBAL_SDF_RESOLUTION;
+
+        VkBufferMemoryBarrier2 buffer_barriers[3] = {
             ez_buffer_barrier(_objects_buffer, EZ_RESOURCE_STATE_COPY_DEST),
             ez_buffer_barrier(_upload_params_buffer, EZ_RESOURCE_STATE_COPY_DEST),
+            ez_buffer_barrier(_global_sdf_buffer, EZ_RESOURCE_STATE_COPY_DEST),
         };
-        ez_pipeline_barrier(0, 2, buffer_barriers, 0, nullptr);
+        ez_pipeline_barrier(0, 3, buffer_barriers, 0, nullptr);
 
         ez_update_buffer(_objects_buffer, _object_datas.size() * sizeof(ObjectData), 0, _object_datas.data());
         ez_update_buffer(_upload_params_buffer, _upload_params_datas.size() * sizeof(UploadParamsType), 0, _upload_params_datas.data());
+        ez_update_buffer(_global_sdf_buffer, sizeof(GlobalSignDistanceFieldData), 0, &_global_sdf_data);
 
         buffer_barriers[0] = ez_buffer_barrier(_objects_buffer, EZ_RESOURCE_STATE_SHADER_RESOURCE);
         buffer_barriers[1] = ez_buffer_barrier(_upload_params_buffer, EZ_RESOURCE_STATE_SHADER_RESOURCE);
-        ez_pipeline_barrier(0, 2, buffer_barriers, 0, nullptr);
+        buffer_barriers[2] = ez_buffer_barrier(_global_sdf_buffer, EZ_RESOURCE_STATE_SHADER_RESOURCE);
+        ez_pipeline_barrier(0, 3, buffer_barriers, 0, nullptr);
 
         // Clear stage
         VkImageMemoryBarrier2 image_barriers[2];
@@ -203,7 +243,7 @@ void GlobalSignDistanceFieldPass::render()
         ez_reset_pipeline_state();
         ez_set_compute_shader(ShaderManager::get()->get_shader("upload_global_sdf.comp"));
 
-        for (int i = 0; i < _upload_params_datas.size(); ++i)
+        for (int i = 0; i < _bricks.size(); ++i)
         {
             auto& upload_params_data = _upload_params_datas[i];
             ez_bind_texture(0, _global_sdf_texture, 0);

@@ -2,13 +2,13 @@
 #include "scene.h"
 #include "sdf_generator.h"
 #include "ez_vulkan.h"
-#include <cgltf.h>
-#include <gltf_sdf.h>
 #include <glm/glm.hpp>
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtx/euler_angles.hpp>
 #include <map>
+#define CGLTF_IMPLEMENTATION
+#include <cgltf.h>
 
 glm::mat4 get_local_matrix(cgltf_node* node)
 {
@@ -272,7 +272,7 @@ Scene* load_scene(const std::string& file_path)
             primitive->bounds.grow(0.02f);
 
             // SDF
-            primitive->sdf = generate_sdf(primitive->bounds, 32, vertex_count, (float*)position_data, index_count, (uint32_t*)index_data);
+            primitive->sdf = generate_sdf(primitive->bounds, 32, vertex_count, (float*)position_data, index_count, index_data, primitive->index_type);
         }
     }
 
