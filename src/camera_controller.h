@@ -2,6 +2,7 @@
 
 #include "event.h"
 #include <glm/glm.hpp>
+#include <set>
 
 class Camera;
 
@@ -32,10 +33,14 @@ private:
 
     void on_mouse_scroll(float offset);
 
+    void on_keyboard(int button, int action);
+
     Camera* _camera = nullptr;
     bool _grabbing = false;
     glm::vec2 _start_point{};
+    std::set<int> _pressed_keys;
     EventHandle _on_mouse_position_handle;
     EventHandle _on_mouse_button_handle;
     EventHandle _on_mouse_scroll_handle;
+    EventHandle _on_keyboard_handle;
 };

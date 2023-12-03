@@ -1,13 +1,14 @@
-#include "ez_vulkan.h"
-#include "shader_manager.h"
-#include "geometry_manager.h"
-#include "input.h"
-#include "filesystem.h"
-#include "scene.h"
-#include "scene_importer.h"
 #include "camera.h"
 #include "camera_controller.h"
+#include "ez_vulkan.h"
+#include "filesystem.h"
+#include "geometry_manager.h"
+#include "input.h"
 #include "renderer.h"
+#include "scene.h"
+#include "scene_importer.h"
+#include "shader_manager.h"
+
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3.h>
 #include <GLFW/glfw3native.h>
@@ -31,6 +32,11 @@ static void mouse_scroll_callback(GLFWwindow* window, double offset_x, double of
     Input::get()->set_mouse_scroll((float)offset_y);
 }
 
+static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
+{
+    Input::get()->set_keyboard(key, action);
+}
+
 int main()
 {
     glfwInit();
@@ -40,6 +46,7 @@ int main()
     glfwSetCursorPosCallback(glfw_window, cursor_position_callback);
     glfwSetMouseButtonCallback(glfw_window, mouse_button_callback);
     glfwSetScrollCallback(glfw_window, mouse_scroll_callback);
+    glfwSetKeyCallback(glfw_window, key_callback);
 
     ez_init();
     GeometryManager::get()->setup();
@@ -48,11 +55,12 @@ int main()
     ez_create_swapchain(glfwGetWin32Window(glfw_window), swapchain);
 
     Camera* camera = new Camera();
-    camera->set_aspect(800.0f/600.0f);
-    camera->set_translation(glm::vec3(0.0f, 0.0f, 0.0f));
+    camera->set_aspect(800.0f / 600.0f);
+    camera->set_translation(glm::vec3(0.0f, 10.0f, 30.0f));
     CameraController* camera_controller = new CameraController();
     camera_controller->set_camera(camera);
-    Scene* scene = load_scene(std::string(PROJECT_DIR) + "/data/scenes/test/test.gltf");
+    //Scene* scene = load_scene(std::string(PROJECT_DIR) + "/data/scenes/test/test.gltf");
+    Scene* scene = load_scene(std::string(PROJECT_DIR) + "/data/scenes/test/y_20.gltf");
     Renderer* renderer = new Renderer();
     renderer->set_scene(scene);
     renderer->set_camera(camera);
@@ -68,12 +76,12 @@ int main()
 
         if (swapchain_status == EzSwapchainStatus::Resized)
         {
-            camera->set_aspect(swapchain->width/swapchain->height);
+            camera->set_aspect(swapchain->width / swapchain->height);
         }
 
         ez_acquire_next_image(swapchain);
 
-        renderer->render(swapchain);
+        renderer->render(swapchain, Input::get()->get_show_type());
 
         VkImageMemoryBarrier2 present_barrier = ez_image_barrier(swapchain,
                                                                  0,

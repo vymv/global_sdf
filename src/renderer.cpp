@@ -1,8 +1,8 @@
 #include "renderer.h"
-#include "camera.h"
-#include "scene.h"
 #include "base_pass.h"
+#include "camera.h"
 #include "global_sdf_pass.h"
+#include "scene.h"
 #include "visualize_sdf_pass.h"
 
 Renderer::Renderer()
@@ -30,7 +30,7 @@ Renderer::~Renderer()
         ez_destroy_buffer(_view_buffer);
     if (_color_rt)
         ez_destroy_texture(_color_rt);
-    if(_depth_rt)
+    if (_depth_rt)
         ez_destroy_texture(_depth_rt);
 }
 
@@ -115,12 +115,12 @@ void Renderer::update_view_buffer()
     ez_pipeline_barrier(0, 1, &barrier, 0, nullptr);
 }
 
-void Renderer::render(EzSwapchain swapchain)
+void Renderer::render(EzSwapchain swapchain, int show_type)
 {
     if (!_scene || !_camera)
         return;
 
-    if (swapchain->width == 0 || swapchain->height ==0)
+    if (swapchain->width == 0 || swapchain->height == 0)
         return;
 
     if (_width != swapchain->width || _height != swapchain->height)
@@ -137,9 +137,16 @@ void Renderer::render(EzSwapchain swapchain)
     update_view_buffer();
 
     // Render passes
-    _base_pass->render();
-    _global_sdf_pass->render();
-    _visualize_sdf_pass->render();
+    if (show_type == 0)
+    {
+        _base_pass->render();
+    }
+    else
+    {
+        //_base_pass->render();
+        _global_sdf_pass->render();
+        _visualize_sdf_pass->render();
+    }
 
     // Copy to swapchain
     VkImageMemoryBarrier2 copy_barriers[] = {
@@ -153,6 +160,6 @@ void Renderer::render(EzSwapchain swapchain)
     copy_region.srcSubresource.layerCount = 1;
     copy_region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     copy_region.dstSubresource.layerCount = 1;
-    copy_region.extent = { swapchain->width, swapchain->height, 1 };
+    copy_region.extent = {swapchain->width, swapchain->height, 1};
     ez_copy_image(_color_rt, swapchain, copy_region);
 }

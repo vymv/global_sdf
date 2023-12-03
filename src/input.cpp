@@ -24,6 +24,10 @@ void Input::set_mouse_button(int button, int action)
         case 1:
             _mouse_button_down[button] = true;
             _mouse_button_held[button] = true;
+            if (button == 2)
+            {
+                show_type = (ShowType)((show_type + 1) % 3);
+            }
             break;
         default:
             break;
@@ -35,4 +39,9 @@ void Input::set_mouse_scroll(float offset)
 {
     _mouse_scroll_wheel = offset;
     on_mouse_scroll_event.dispatch(offset);
+}
+
+void Input::set_keyboard(int button, int action)
+{
+    on_keyboard_event.dispatch(button, action);
 }

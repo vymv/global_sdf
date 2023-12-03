@@ -18,12 +18,12 @@ SDF* generate_sdf(const BoundingBox& bounds, uint32_t resolution, uint32_t verte
     float* voxel_data = (float*)malloc(voxel_data_size);
     uint32_t sample_count = 6;
     glm::vec3 sample_directions[6] = {
-        glm::vec3(0.0f, 1.0f, 0.0f),    // Up
-        glm::vec3(0.0f, -1.0f, 0.0f),   // Down
-        glm::vec3(-1.0f, 0.0f, 0.0f),   // Left
-        glm::vec3(1.0f, 0.0f, 0.0f),    // Right
-        glm::vec3(0.0f, 0.0f, 1.0f),    // Forward
-        glm::vec3(0.0f, 0.0f, -1.0f)    // Backward
+        glm::vec3(0.0f, 1.0f, 0.0f), // Up
+        glm::vec3(0.0f, -1.0f, 0.0f),// Down
+        glm::vec3(-1.0f, 0.0f, 0.0f),// Left
+        glm::vec3(1.0f, 0.0f, 0.0f), // Right
+        glm::vec3(0.0f, 0.0f, 1.0f), // Forward
+        glm::vec3(0.0f, 0.0f, -1.0f) // Backward
     };
 
     uint32_t* indices_32;
@@ -37,10 +37,13 @@ SDF* generate_sdf(const BoundingBox& bounds, uint32_t resolution, uint32_t verte
         indices_16 = (uint16_t*)indices;
     }
 
+#pragma omp parallel for
     for (int x = 0; x < resolution; ++x)
     {
+#pragma omp parallel for
         for (int y = 0; y < resolution; ++y)
         {
+#pragma omp parallel for
             for (int z = 0; z < resolution; ++z)
             {
                 glm::vec3 voxel_pos = glm::vec3((float)x, (float)y, (float)z) * xyz_to_local_mul + xyz_to_local_add;
@@ -52,6 +55,7 @@ SDF* generate_sdf(const BoundingBox& bounds, uint32_t resolution, uint32_t verte
                 int idx0;
                 int idx1;
                 int idx2;
+                // 对这个mesh中的每个三角面片
                 for (int i = 0; i < index_count; i += 3)
                 {
                     if (index_type == VK_INDEX_TYPE_UINT32)
@@ -81,10 +85,12 @@ SDF* generate_sdf(const BoundingBox& bounds, uint32_t resolution, uint32_t verte
                 }
                 if (hit)
                 {
-                    min_distance = hit_distance;
+                    min_distance = hit_distance;// 找到离voxel_pos最近的三角面片，计算距离
                 }
 
                 uint32_t hit_back_count = 0, hit_count = 0;
+
+                // 朝六个方向trace ray，判断sdf符号
                 for (int sample = 0; sample < sample_count; sample++)
                 {
                     hit = false;
@@ -133,7 +139,7 @@ SDF* generate_sdf(const BoundingBox& bounds, uint32_t resolution, uint32_t verte
                 uint32_t z_address = resolution * resolution * z;
                 uint32_t y_address = resolution * y + z_address;
                 uint32_t x_address = x + y_address;
-                *(voxel_data + x_address) = min_distance;
+                *(voxel_data + x_address) = min_distance;// 写入结果到voxel_data
             }
         }
     }
@@ -160,7 +166,7 @@ SDF* generate_sdf(const BoundingBox& bounds, uint32_t resolution, uint32_t verte
     range.imageSubresource.mipLevel = 0;
     range.imageSubresource.baseArrayLayer = 0;
     range.imageSubresource.layerCount = 1;
-    ez_update_image(sdf->texture, range, voxel_data);
+    ez_update_image(sdf->texture, range, voxel_data);// 最终结果写入到sdf->texture
 
     barrier = ez_image_barrier(sdf->texture, EZ_RESOURCE_STATE_SHADER_RESOURCE);
     ez_pipeline_barrier(0, 0, nullptr, 1, &barrier);

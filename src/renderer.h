@@ -28,7 +28,7 @@ public:
 
     ~Renderer();
 
-    void render(EzSwapchain swapchain);
+    void render(EzSwapchain swapchain, int show_type);
 
     void set_scene(Scene* scene);
 

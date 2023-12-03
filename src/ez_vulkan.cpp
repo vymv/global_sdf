@@ -3,11 +3,11 @@
 #include <windows.h>
 #endif
 #include <deque>
-#include <unordered_map>
 #include <spirv_reflect.h>
+#include <unordered_map>
 
-#define EZ_MAX(a,b)            (((a) > (b)) ? (a) : (b))
-#define EZ_MIN(a,b)            (((a) < (b)) ? (a) : (b))
+#define EZ_MAX(a, b) (((a) > (b)) ? (a) : (b))
+#define EZ_MIN(a, b) (((a) < (b)) ? (a) : (b))
 
 template<class T>
 constexpr void hash_combine(std::size_t& seed, const T& v)
@@ -551,6 +551,8 @@ void ez_init()
     device_required_extensions.push_back(VK_KHR_MAINTENANCE2_EXTENSION_NAME);
     device_required_extensions.push_back(VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME);
     device_required_extensions.push_back(VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME);
+    device_required_extensions.push_back(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
+    device_required_extensions.push_back(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME);
     for (auto it = device_required_extensions.begin(); it != device_required_extensions.end(); ++it)
     {
         if (is_extension_supported(*it, device_available_extensions))
@@ -820,7 +822,7 @@ void ez_create_buffer(const EzBufferDesc& desc, EzBuffer& buffer)
     buffer = new EzBuffer_T();
     buffer->size = desc.size;
 
-    VkBufferCreateInfo buffer_create_info = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
+    VkBufferCreateInfo buffer_create_info = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
     buffer_create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     buffer_create_info.size = desc.size;
     buffer_create_info.usage = desc.usage | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
@@ -830,7 +832,7 @@ void ez_create_buffer(const EzBufferDesc& desc, EzBuffer& buffer)
     vkGetBufferMemoryRequirements(ctx.device, buffer->handle, &memory_requirements);
     uint32_t memory_type_tndex = select_memory_type(ctx.physical_device_memory_properties, memory_requirements.memoryTypeBits, desc.memory_flags);
 
-    VkMemoryAllocateInfo allocate_info = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
+    VkMemoryAllocateInfo allocate_info = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
     allocate_info.allocationSize = memory_requirements.size;
     allocate_info.memoryTypeIndex = memory_type_tndex;
     VK_ASSERT(vkAllocateMemory(ctx.device, &allocate_info, nullptr, &buffer->memory));
@@ -2119,7 +2121,7 @@ VkImageMemoryBarrier2 ez_image_barrier(EzSwapchain swapchain, EzResourceState re
     VkImageLayout image_layout = ez_get_image_layout(resource_state);
     VkAccessFlags access_flags = ez_get_access_flags(resource_state);
     VkPipelineStageFlags pipeline_stage_flags = ez_get_pipeline_stage_flags(access_flags);
-    return ez_image_barrier(swapchain, pipeline_stage_flags, access_flags,image_layout, aspect_mask);
+    return ez_image_barrier(swapchain, pipeline_stage_flags, access_flags, image_layout, aspect_mask);
 }
 
 VkImageMemoryBarrier2 ez_image_barrier(EzTexture texture, EzResourceState resource_state)
@@ -2128,7 +2130,7 @@ VkImageMemoryBarrier2 ez_image_barrier(EzTexture texture, EzResourceState resour
     VkImageLayout image_layout = ez_get_image_layout(resource_state);
     VkAccessFlags access_flags = ez_get_access_flags(resource_state);
     VkPipelineStageFlags pipeline_stage_flags = ez_get_pipeline_stage_flags(access_flags);
-    return ez_image_barrier(texture, pipeline_stage_flags, access_flags,image_layout, aspect_mask);
+    return ez_image_barrier(texture, pipeline_stage_flags, access_flags, image_layout, aspect_mask);
 }
 
 VkBufferMemoryBarrier2 ez_buffer_barrier(EzBuffer buffer, EzResourceState resource_state)
@@ -2139,8 +2141,8 @@ VkBufferMemoryBarrier2 ez_buffer_barrier(EzBuffer buffer, EzResourceState resour
 }
 
 void ez_pipeline_barrier(VkDependencyFlags dependency_flags,
-                      size_t buffer_barrier_count, const VkBufferMemoryBarrier2* buffer_barriers,
-                      size_t image_barrier_count, const VkImageMemoryBarrier2* image_barriers)
+                         size_t buffer_barrier_count, const VkBufferMemoryBarrier2* buffer_barriers,
+                         size_t image_barrier_count, const VkImageMemoryBarrier2* image_barriers)
 {
     VkDependencyInfo dependency_info = {};
     dependency_info.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
