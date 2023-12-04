@@ -8,7 +8,7 @@
 #define GLOBAL_SDF_RESOLUTION 512
 #define GLOBAL_SDF_BRICK_SIZE 32
 #define GLOBAL_SDF_MAX_OBJECT_COUNT 64
-#define MESH_SDF_RESOLUTION 32
+#define MESH_SDF_RESOLUTION 64
 struct SDF
 {
     BoundingBox bounds;

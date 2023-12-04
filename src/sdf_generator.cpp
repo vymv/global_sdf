@@ -67,7 +67,7 @@ SDF* generate_sdf(const BoundingBox& bounds, uint32_t resolution, uint32_t verte
     SDF* sdf;
 
 #if USE_SDF_CACHE
-    sdf = load_sdf_cached(file_path.c_str());
+    sdf = load_sdf_cached(file_path.c_str(), bounds, resolution);
     if (sdf)
     {
         return sdf;
@@ -244,7 +244,7 @@ SDF* generate_sdf(const BoundingBox& bounds, uint32_t resolution, uint32_t verte
     return sdf;
 }
 
-SDF* load_sdf_cached(const char* path)
+SDF* load_sdf_cached(const char* path, const BoundingBox& bounds, uint32_t resolution)
 {
     auto check_validate = [](const SDFCache& cache, const BoundingBox& bounds, uint32_t resolution) -> bool
     {
@@ -278,7 +278,7 @@ SDF* load_sdf_cached(const char* path)
     json j = json::parse(json_str);
     SDFCache cache;
     cache = j["sdf_cache"].get<SDFCache>();
-    if (!check_validate(cache, cache.bounds, cache.resolution))
+    if (!check_validate(cache, bounds, resolution))
     {
         return nullptr;
     }
