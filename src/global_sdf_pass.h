@@ -1,14 +1,11 @@
 #pragma once
 
 #include "ez_vulkan.h"
+#include "sdf.h"
 #include <core/hash.h>
 #include <glm/glm.hpp>
-#include <vector>
 #include <unordered_map>
-
-#define GLOBAL_SDF_RESOLUTION 128
-#define GLOBAL_SDF_BRICK_SIZE 32
-#define GLOBAL_SDF_MAX_OBJECT_COUNT 16
+#include <vector>
 
 class Renderer;
 

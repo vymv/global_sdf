@@ -1,9 +1,13 @@
 #pragma once
 
+#include "ez_vulkan.h"
 #include <glm/glm.hpp>
 #include <math/bounding_box.h>
-#include "ez_vulkan.h"
 
+#define GLOBAL_SDF_RESOLUTION 512
+#define GLOBAL_SDF_BRICK_SIZE 32
+#define GLOBAL_SDF_MAX_OBJECT_COUNT 64
+#define MESH_SDF_RESOLUTION 32
 struct SDF
 {
     BoundingBox bounds;

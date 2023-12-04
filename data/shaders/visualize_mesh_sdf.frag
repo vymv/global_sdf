@@ -4,16 +4,18 @@
 layout(location = 0) in vec2 in_texcoord;
 layout(location = 0) out vec4 out_color;
 
-layout(binding = 0) uniform texture3D global_sdf_texture;
+// layout(binding = 0) uniform texture3D global_sdf_texture;
+layout(binding = 0) uniform texture3D mesh_sdf_textures[GLOBAL_SDF_MAX_OBJECT_COUNT];
 layout(binding = 1) uniform sampler sdf_sampler;
 
-layout(std140, binding = 2) uniform GlobalSignDistanceFieldData
+layout(std140, binding = 2) uniform MeshSignDistanceFieldData
 {
-    vec4 bounds_position_distance;
-    float voxel_size;
+    vec3 bounds_position[GLOBAL_SDF_MAX_OBJECT_COUNT];
+    vec3 bounds_distance[GLOBAL_SDF_MAX_OBJECT_COUNT];
     float resolution;
+    float global_sdf_distance;
 }
-global_sdf_data;
+mesh_sdf_data;
 
 layout(std140, set = 0, binding = 3) uniform ViewBuffer
 {
@@ -54,22 +56,22 @@ vec2 line_hit_box(vec3 line_start, vec3 line_end, vec3 box_min, vec3 box_max)
     return clamp(intersections, vec2(0.0), vec2(1.0));
 }
 
-vec3 get_global_sdf_uv(vec3 world_position)
+vec3 get_mesh_sdf_uv(vec3 world_position, int sdf_index)
 {
-    float max_distance = global_sdf_data.bounds_position_distance.w * 2.0;
-    vec3 position_in_bounds = world_position - global_sdf_data.bounds_position_distance.xyz;
+    float max_distance = mesh_sdf_data[sdf_index].bounds_position_distance.w * 2.0;
+    vec3 position_in_bounds = world_position - mesh_sdf_data[sdf_index].bounds_position_distance.xyz;
     return clamp(position_in_bounds / max_distance + 0.5, vec3(0.0), vec3(1.0));
 }
 
-HitResult ray_trace(Ray ray)
+HitResult ray_trace(Ray ray, int sdf_index)
 {
     HitResult hit;
     hit.hit_time = -1.0;
 
-    float bounds_distance = global_sdf_data.bounds_position_distance.w;
-    vec3 bounds_position = global_sdf_data.bounds_position_distance.xyz;
+    float bounds_distance = mesh_sdf_data[sdf_index].bounds_position_distance.w;
+    vec3 bounds_position = mesh_sdf_data[sdf_index].bounds_position_distance.xyz;
     float max_distance = bounds_distance * 2.0;
-    float voxel_size = max_distance / global_sdf_data.resolution;
+    float voxel_size = max_distance / mesh_sdf_data[sdf_index].resolution;
     vec3 end_position = ray.world_position + ray.world_direction * max_distance;
     vec3 world_position = ray.world_position;
     vec2 intersections = line_hit_box(world_position, end_position, bounds_position - bounds_distance, bounds_position + bounds_distance);
@@ -78,7 +80,7 @@ HitResult ray_trace(Ray ray)
         return hit;
 
     float step_time = intersections.x;
-    for (float step = 0.0; step < global_sdf_data.resolution; ++step)
+    for (float step = 0.0; step < mesh_sdf_data[sdf_index].resolution; ++step)
     {
         if (step_time > intersections.y)
         {
@@ -87,8 +89,8 @@ HitResult ray_trace(Ray ray)
         }
 
         vec3 step_position = world_position + ray.world_direction * step_time;// step_time 累计步进长度
-        vec3 uv = get_global_sdf_uv(step_position);
-        float sdf_distance = textureLod(sampler3D(global_sdf_texture, sdf_sampler), uv, 0.0).r * max_distance;// 光线当前步进到的位置
+        vec3 uv = get_mesh_sdf_uv(step_position, sdf_index);
+        float sdf_distance = textureLod(sampler3D(mesh_sdf_textures[sdf_index], sdf_sampler), uv, 0.0).r * max_distance;// 光线当前步进到的位置
         float min_surface_thickness = 0.1;
         if (sdf_distance < min_surface_thickness)// 如果接近物体表面，或者进入物体内部
         {
@@ -113,7 +115,16 @@ void main()
     Ray ray;
     ray.world_position = view_buffer.view_position.xyz;
     ray.world_direction = normalize(target_position.xyz - view_buffer.view_position.xyz);
-    HitResult hit = ray_trace(ray);
 
-    out_color = vec4(vec3(hit.step_count / global_sdf_data.resolution), 1.0);// 根据步进的远近决定颜色，介于01之间
+    min_distance = global_sdf_distance;
+    for (int i = 0; i < GLOBAL_SDF_MAX_OBJECT_COUNT; ++i)
+    {
+        HitResult hit = ray_trace(ray, i);
+        if (hit.hit_time < min_distance)
+        {
+            min_distance = hit.hit_time;
+        }
+    }
+
+    out_color = vec4(vec3(min_distance / global_sdf_distance), 1.0);// 根据步进的远近决定颜色，介于01之间
 }
