@@ -1,15 +1,17 @@
 #include "scene_importer.h"
+#include "ez_vulkan.h"
 #include "scene.h"
 #include "sdf_generator.h"
-#include "ez_vulkan.h"
+#include <filesystem>
 #include <glm/glm.hpp>
-#include <glm/gtx/quaternion.hpp>
-#include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtx/euler_angles.hpp>
+#include <glm/gtx/matrix_decompose.hpp>
+#include <glm/gtx/quaternion.hpp>
 #include <map>
+
 #define CGLTF_IMPLEMENTATION
 #include <cgltf.h>
-
+#define ENABLE_SDF_CACHE
 glm::mat4 get_local_matrix(cgltf_node* node)
 {
     glm::vec3 translation = glm::vec3(0.0f);
@@ -62,7 +64,7 @@ cgltf_attribute* get_gltf_attribute(cgltf_primitive* primitive, cgltf_attribute_
     for (int i = 0; i < primitive->attributes_count; i++)
     {
         cgltf_attribute* att = &primitive->attributes[i];
-        if(att->type == type)
+        if (att->type == type)
             return att;
     }
     return nullptr;
@@ -112,7 +114,7 @@ EzBuffer create_vertex_buffer(void* data, uint32_t data_size)
     buffer_desc.memory_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
     ez_create_buffer(buffer_desc, buffer);
 
-    VkBufferMemoryBarrier2 barrier = ez_buffer_barrier(buffer,VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT);
+    VkBufferMemoryBarrier2 barrier = ez_buffer_barrier(buffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT);
     ez_pipeline_barrier(0, 1, &barrier, 0, nullptr);
 
     ez_update_buffer(buffer, data_size, 0, data);
@@ -172,7 +174,8 @@ Scene* load_scene(const std::string& file_path)
         cgltf_free(data);
         return nullptr;
     }
-
+    auto path = std::filesystem::path(file_path);
+    auto file_root = std::filesystem::path(file_path).parent_path();
     // Load meshes
     std::map<cgltf_mesh*, Mesh*> mesh_helper;
     for (size_t i = 0; i < data->meshes_count; ++i)
@@ -272,25 +275,26 @@ Scene* load_scene(const std::string& file_path)
             primitive->bounds.grow(0.02f);
 
             // SDF
-            primitive->sdf = generate_sdf(primitive->bounds, 32, vertex_count, (float*)position_data, index_count, index_data, primitive->index_type);
+            std::string sdf_cache_path = (file_root / "cache" / (path.stem().string() + "_" + std::to_string(i) + "#" + std::to_string(j) + ".json")).generic_string();
+
+            primitive->sdf = generate_sdf(primitive->bounds, 32, vertex_count, (float*)position_data, index_count, index_data, primitive->index_type, sdf_cache_path);
+        }
+
+        // Load nodes
+        for (size_t i = 0; i < data->nodes_count; ++i)
+        {
+            Node* node = new Node();
+            scene->nodes.push_back(node);
+            cgltf_node* cnode = &data->nodes[i];
+
+            node->name = cnode->name;
+
+            node->transform = get_world_matrix(cnode);
+
+            if (cnode->mesh)
+                node->mesh = mesh_helper[cnode->mesh];
         }
     }
-
-    // Load nodes
-    for (size_t i = 0; i < data->nodes_count; ++i)
-    {
-        Node* node = new Node();
-        scene->nodes.push_back(node);
-        cgltf_node* cnode = &data->nodes[i];
-
-        node->name = cnode->name;
-
-        node->transform = get_world_matrix(cnode);
-
-        if (cnode->mesh)
-            node->mesh = mesh_helper[cnode->mesh];
-    }
-
     cgltf_free(data);
     return scene;
 }
