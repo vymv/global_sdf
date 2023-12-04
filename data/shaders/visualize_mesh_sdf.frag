@@ -1,19 +1,19 @@
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
-
+#define GLOBAL_SDF_MAX_OBJECT_COUNT 64
 layout(location = 0) in vec2 in_texcoord;
 layout(location = 0) out vec4 out_color;
 
-// layout(binding = 0) uniform texture3D global_sdf_texture;
 layout(binding = 0) uniform texture3D mesh_sdf_textures[GLOBAL_SDF_MAX_OBJECT_COUNT];
 layout(binding = 1) uniform sampler sdf_sampler;
 
-layout(std140, binding = 2) uniform MeshSignDistanceFieldData
+layout(std140, binding = 2) buffer MeshSignDistanceFieldData
 {
     vec3 bounds_position[GLOBAL_SDF_MAX_OBJECT_COUNT];
     vec3 bounds_distance[GLOBAL_SDF_MAX_OBJECT_COUNT];
     float resolution;
     float global_sdf_distance;
+    int sdf_count;
 }
 mesh_sdf_data;
 
@@ -71,11 +71,11 @@ HitResult ray_trace(Ray ray, int sdf_index)
     vec3 bounds_distance = mesh_sdf_data.bounds_distance[sdf_index];
     vec3 bounds_position = mesh_sdf_data.bounds_position[sdf_index];
     vec3 max_distance = bounds_distance * 2.0;
-    float voxel_size = max_distance / mesh_sdf_data.resolution;
+    vec3 voxel_size = max_distance / mesh_sdf_data.resolution;
     vec3 end_position = ray.world_position + ray.world_direction * max_distance;
     vec3 world_position = ray.world_position;
     vec2 intersections = line_hit_box(world_position, end_position, bounds_position - bounds_distance, bounds_position + bounds_distance);
-    intersections *= max_distance;
+    intersections *= max(max_distance.x, max(max_distance.y, max_distance.z));
     if (intersections.x >= intersections.y)
         return hit;
 
@@ -90,7 +90,7 @@ HitResult ray_trace(Ray ray, int sdf_index)
 
         vec3 step_position = world_position + ray.world_direction * step_time;// step_time 累计步进长度
         vec3 uv = get_mesh_sdf_uv(step_position, sdf_index);
-        float sdf_distance = textureLod(sampler3D(mesh_sdf_textures[sdf_index], sdf_sampler), uv, 0.0).r * max_distance;// 光线当前步进到的位置
+        float sdf_distance = textureLod(sampler3D(mesh_sdf_textures[sdf_index], sdf_sampler), uv, 0.0).r * max(max(max_distance.x, max_distance.y), max_distance.z);// 光线当前步进到的位置
         float min_surface_thickness = 0.1;
         if (sdf_distance < min_surface_thickness)// 如果接近物体表面，或者进入物体内部
         {
@@ -99,7 +99,7 @@ HitResult ray_trace(Ray ray, int sdf_index)
             break;
         }
 
-        step_time += voxel_size;// voxel_size 每次步进长度
+        step_time += max(max(voxel_size.x, voxel_size.y), voxel_size.z);// voxel_size 每次步进长度
     }
 
     return hit;
@@ -116,8 +116,8 @@ void main()
     ray.world_position = view_buffer.view_position.xyz;
     ray.world_direction = normalize(target_position.xyz - view_buffer.view_position.xyz);
 
-    min_distance = mesh_sdf_data.global_sdf_distance;
-    for (int i = 0; i < GLOBAL_SDF_MAX_OBJECT_COUNT; ++i)
+    float min_distance = mesh_sdf_data.global_sdf_distance;
+    for (int i = 0; i < mesh_sdf_data.sdf_count; ++i)
     {
         HitResult hit = ray_trace(ray, i);
         if (hit.hit_time < min_distance)
@@ -126,5 +126,5 @@ void main()
         }
     }
 
-    out_color = vec4(vec3(min_distance / mesh_sdf_data.global_sdf_distance), 1.0);// 根据步进的远近决定颜色，介于01之间
+    out_color = vec4(vec3(min_distance / mesh_sdf_data.global_sdf_distance), 1.0);
 }

@@ -21,6 +21,7 @@ private:
         glm::vec3 bounds_distance[GLOBAL_SDF_MAX_OBJECT_COUNT];
         float resolution;
         float global_sdf_distance;
+        int mesh_count;
     };
 
     Renderer* _renderer;
@@ -29,4 +30,5 @@ private:
     EzBuffer _upload_meshsdf_buffer = VK_NULL_HANDLE;
 
     EzSampler _sampler = VK_NULL_HANDLE;
+    EzTexture _empty_texture = VK_NULL_HANDLE;
 };

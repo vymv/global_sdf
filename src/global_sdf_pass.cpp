@@ -68,7 +68,7 @@ void GlobalSignDistanceFieldPass::make_scene_dirty()
 void GlobalSignDistanceFieldPass::render()
 {
     bool need_upload = false;
-    float camera_distance = 100.0f;//_renderer->_camera->get_far();
+    float camera_distance = 40.0f;//_renderer->_camera->get_far();
     glm::vec3 camera_center = _renderer->_camera->get_translation();
     if (_scene_dirty || _view_distance != camera_distance || glm::distance(_view_center, camera_center) >= camera_distance * 0.1)
     {
