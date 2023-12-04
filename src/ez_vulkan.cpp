@@ -1,5 +1,5 @@
 #include "ez_vulkan.h"
-#ifdef WIN32
+#if defined(_WIN32) || defined(_WIN64)
 #include <windows.h>
 #endif
 #include <deque>
@@ -699,7 +699,7 @@ void ez_flush()
 void ez_create_swapchain(void* window, EzSwapchain& swapchain)
 {
     swapchain = new EzSwapchain_T();
-#ifdef WIN32
+#if defined(_WIN32) || defined(_WIN64)
     VkWin32SurfaceCreateInfoKHR surface_create_info = {};
     surface_create_info.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
     surface_create_info.pNext = nullptr;

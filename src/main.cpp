@@ -59,7 +59,7 @@ int main()
     camera->set_translation(glm::vec3(0.0f, 10.0f, 30.0f));
     CameraController* camera_controller = new CameraController();
     camera_controller->set_camera(camera);
-    //Scene* scene = load_scene(std::string(PROJECT_DIR) + "/data/scenes/test/test.gltf");
+    // Scene* scene = load_scene(std::string(PROJECT_DIR) + "/data/scenes/test/test.gltf");
     Scene* scene = load_scene(std::string(PROJECT_DIR) + "/data/scenes/test/y_20.gltf");
     Renderer* renderer = new Renderer();
     renderer->set_scene(scene);

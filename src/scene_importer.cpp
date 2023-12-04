@@ -2,6 +2,7 @@
 #include "ez_vulkan.h"
 #include "scene.h"
 #include "sdf_generator.h"
+#include <filesystem>
 #include <glm/glm.hpp>
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
@@ -10,7 +11,7 @@
 
 #define CGLTF_IMPLEMENTATION
 #include <cgltf.h>
-
+#define ENABLE_SDF_CACHE
 glm::mat4 get_local_matrix(cgltf_node* node)
 {
     glm::vec3 translation = glm::vec3(0.0f);
@@ -173,8 +174,8 @@ Scene* load_scene(const std::string& file_path)
         cgltf_free(data);
         return nullptr;
     }
-
-    data->meshes_count = 1;
+    auto path = std::filesystem::path(file_path);
+    auto file_root = std::filesystem::path(file_path).parent_path();
     // Load meshes
     std::map<cgltf_mesh*, Mesh*> mesh_helper;
     for (size_t i = 0; i < data->meshes_count; ++i)
@@ -273,11 +274,12 @@ Scene* load_scene(const std::string& file_path)
             primitive->bounds.merge(glm::vec3(maxp[0], maxp[1], maxp[2]));
             primitive->bounds.grow(0.02f);
 
+            // SDF
+            std::string sdf_cache_path = (file_root / "cache" / (path.stem().string() + "_" + std::to_string(i) + "#" + std::to_string(j) + ".json")).generic_string();
             // SDF (保存在mesh->primitives和scene->primitives)
-            primitive->sdf = generate_sdf(primitive->bounds, MESH_SDF_RESOLUTION, vertex_count, (float*)position_data, index_count, index_data, primitive->index_type);
+            primitive->sdf = generate_sdf(primitive->bounds, MESH_SDF_RESOLUTION, vertex_count, (float*)position_data, index_count, index_data, primitive->index_type, sdf_cache_path);
         }
     }
-
     // Load nodes
     for (size_t i = 0; i < data->nodes_count; ++i)
     {
@@ -292,7 +294,6 @@ Scene* load_scene(const std::string& file_path)
         if (cnode->mesh)
             node->mesh = mesh_helper[cnode->mesh];
     }
-
     cgltf_free(data);
     return scene;
 }

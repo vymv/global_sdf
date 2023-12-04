@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.13)
 project(global_sdf)
-set(CMAKE_CXX_STANDARD 14)
-
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 add_definitions(-DPROJECT_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 
 file(GLOB_RECURSE SOURCE_FILES "src/*.h" "src/*.cpp")
@@ -33,3 +33,7 @@ if (WIN32)
     target_compile_definitions(volk PRIVATE VK_USE_PLATFORM_WIN32_KHR)
 endif()
 target_link_libraries(global_sdf PUBLIC volk)
+
+add_subdirectory(extern/json)
+target_include_directories(global_sdf PUBLIC extern/json/include)
+target_link_libraries(global_sdf PUBLIC nlohmann_json::nlohmann_json)
