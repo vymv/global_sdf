@@ -24,6 +24,8 @@ public:
 
     EzBuffer get_global_sdf_buffer() { return _global_sdf_buffer; }
 
+    float get_view_distance() { return _view_distance * 2.0; }
+
     EzSampler get_sampler() { return _sampler; }
 
 private:

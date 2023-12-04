@@ -56,4 +56,6 @@ private:
     GlobalSignDistanceFieldPass* _global_sdf_pass;
     friend class VisualizeSignDistanceFieldPass;
     VisualizeSignDistanceFieldPass* _visualize_sdf_pass;
+    friend class VisualizeMeshSignDistanceFieldPass;
+    VisualizeMeshSignDistanceFieldPass* _visualize_meshsdf_pass;
 };

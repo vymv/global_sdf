@@ -174,7 +174,7 @@ Scene* load_scene(const std::string& file_path)
         return nullptr;
     }
 
-    // data->meshes_count = 1;
+    data->meshes_count = 1;
     // Load meshes
     std::map<cgltf_mesh*, Mesh*> mesh_helper;
     for (size_t i = 0; i < data->meshes_count; ++i)

@@ -16,3 +16,5 @@ struct SDF
     glm::vec3 local_to_uvw_add;
     EzTexture texture;
 };
+glm::vec3 transform_point(const glm::vec3& point, const glm::mat4& mat);
+BoundingBox get_bounds(const BoundingBox& bounds, const glm::mat4& world);

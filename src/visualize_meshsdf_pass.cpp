@@ -1,9 +1,9 @@
+#include "visualize_meshsdf_pass.h"
 #include "geometry_manager.h"
 #include "global_sdf_pass.h"
 #include "renderer.h"
 #include "scene.h"
 #include "shader_manager.h"
-#include "visualize_sdf_pass.h"
 
 VisualizeMeshSignDistanceFieldPass::VisualizeMeshSignDistanceFieldPass(Renderer* renderer)
 {
@@ -57,22 +57,41 @@ void VisualizeMeshSignDistanceFieldPass::render()
                 _object_textures.push_back(prim->sdf->texture);
                 BoundingBox volume_bounds = prim->sdf->bounds;
                 volume_bounds = get_bounds(volume_bounds, node->transform);
-                _upload_meshsdf_datas.bounds_position_distance[upload_meshsdf_id] = prim->sdf->bounds
-                                                                                        _upload_meshsdf_datas.resolution[upload_meshsdf_id] = prim->sdf->resolution;
+                _upload_meshsdf_datas.bounds_position[upload_meshsdf_id] = volume_bounds.get_center();
+                _upload_meshsdf_datas.bounds_distance[upload_meshsdf_id] = volume_bounds.get_size() / 2.0f;
+                _upload_meshsdf_datas.resolution = MESH_SDF_RESOLUTION;
+                _upload_meshsdf_datas.global_sdf_distance = global_sdf_pass->get_view_distance();
                 upload_meshsdf_id++;
             }
         }
     }
+
+    // 创建upload mesh buffer
+    if (!_upload_meshsdf_buffer || _upload_meshsdf_buffer->size < sizeof(MeshSignDistanceFieldData))
+    {
+        if (_upload_meshsdf_buffer)
+            ez_destroy_buffer(_upload_meshsdf_buffer);
+
+        EzBufferDesc buffer_desc{};
+        buffer_desc.size = sizeof(MeshSignDistanceFieldData);
+        buffer_desc.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+        buffer_desc.memory_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+        ez_create_buffer(buffer_desc, _upload_meshsdf_buffer);
+    }
+    VkBufferMemoryBarrier2 buffer_barriers[1] = {
+        ez_buffer_barrier(_upload_meshsdf_buffer, EZ_RESOURCE_STATE_COPY_DEST),
+    };
+    ez_pipeline_barrier(0, 1, buffer_barriers, 0, nullptr);
+    ez_update_buffer(_upload_meshsdf_buffer, sizeof(MeshSignDistanceFieldData), 0, &_upload_meshsdf_datas);
+    buffer_barriers[0] = ez_buffer_barrier(_upload_meshsdf_buffer, EZ_RESOURCE_STATE_SHADER_RESOURCE);
+    ez_pipeline_barrier(0, 1, buffer_barriers, 0, nullptr);
 
     for (int j = 0; j < GLOBAL_SDF_MAX_OBJECT_COUNT; ++j)
     {
         ez_bind_texture_array(0, _object_textures[j], 0, j);// mesh sdf
     }
     ez_bind_sampler(1, _sampler);
-
-    ez_bind_texture(0, global_sdf_pass->get_global_sdf_texture(), 0);
-    ez_bind_sampler(1, global_sdf_pass->get_sampler());
-    ez_bind_buffer(2, global_sdf_pass->get_global_sdf_buffer(), global_sdf_pass->get_global_sdf_buffer()->size);
+    ez_bind_buffer(2, _upload_meshsdf_buffer, _upload_meshsdf_buffer->size);
     ez_bind_buffer(3, _renderer->_view_buffer, _renderer->_view_buffer->size);
     glm::vec2 viewport((float)_renderer->_width, (float)_renderer->_height);
     ez_push_constants(&viewport, sizeof(glm::vec2), 0);

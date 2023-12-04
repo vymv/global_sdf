@@ -3,6 +3,7 @@
 #include "camera.h"
 #include "global_sdf_pass.h"
 #include "scene.h"
+#include "visualize_meshsdf_pass.h"
 #include "visualize_sdf_pass.h"
 
 Renderer::Renderer()
@@ -10,6 +11,7 @@ Renderer::Renderer()
     _base_pass = new BasePass(this);
     _global_sdf_pass = new GlobalSignDistanceFieldPass(this);
     _visualize_sdf_pass = new VisualizeSignDistanceFieldPass(this);
+    _visualize_meshsdf_pass = new VisualizeMeshSignDistanceFieldPass(this);
 
     EzBufferDesc buffer_desc{};
     buffer_desc.size = sizeof(ViewBufferType);
@@ -141,9 +143,14 @@ void Renderer::render(EzSwapchain swapchain, int show_type)
     {
         _base_pass->render();
     }
-    else
+    else if (show_type == 1)
     {
         //_base_pass->render();
+        _global_sdf_pass->render();
+        _visualize_meshsdf_pass->render();
+    }
+    else
+    {
         _global_sdf_pass->render();
         _visualize_sdf_pass->render();
     }

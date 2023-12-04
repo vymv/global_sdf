@@ -14,25 +14,19 @@ public:
 
     void render();
 
-    struct MeshSignDistanceFieldData
-    {
-        glm::vec4 bounds_position_distance;
-        float voxel_size;
-        float resolution;
-    };
-    MeshSignDistanceFieldData _mesh_sdf_data;
-
 private:
     struct MeshSignDistanceFieldData
     {
-        glm::vec4 bounds_position_distance[GLOBAL_SDF_MAX_OBJECT_COUNT];
-        float voxel_size[GLOBAL_SDF_MAX_OBJECT_COUNT];
+        glm::vec3 bounds_position[GLOBAL_SDF_MAX_OBJECT_COUNT];
+        glm::vec3 bounds_distance[GLOBAL_SDF_MAX_OBJECT_COUNT];
         float resolution;
-        float global_sdf_resolution;
+        float global_sdf_distance;
     };
 
     Renderer* _renderer;
     std::vector<EzTexture> _object_textures;
     MeshSignDistanceFieldData _upload_meshsdf_datas;
+    EzBuffer _upload_meshsdf_buffer = VK_NULL_HANDLE;
+
     EzSampler _sampler = VK_NULL_HANDLE;
 };
