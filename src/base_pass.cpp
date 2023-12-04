@@ -1,6 +1,6 @@
 #include "base_pass.h"
-#include "scene.h"
 #include "renderer.h"
+#include "scene.h"
 #include "shader_manager.h"
 
 BasePass::BasePass(Renderer* renderer)
@@ -22,7 +22,7 @@ void BasePass::render()
     ez_pipeline_barrier(0, 0, nullptr, 2, rt_barriers);
 
     EzRenderingAttachmentInfo color_info{};
-    color_info.texture = _renderer->_color_rt;
+    color_info.texture = _renderer->_color_rt;// 最终结果
     color_info.clear_value.color = {0.0f, 0.0f, 0.0f, 1.0f};
     EzRenderingAttachmentInfo depth_info{};
     depth_info.texture = _renderer->_depth_rt;

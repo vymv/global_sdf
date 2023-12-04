@@ -1,7 +1,7 @@
 #include "global_sdf_pass.h"
-#include "scene.h"
 #include "camera.h"
 #include "renderer.h"
+#include "scene.h"
 #include "shader_manager.h"
 #include <math/bounding_box.h>
 
@@ -90,7 +90,7 @@ void GlobalSignDistanceFieldPass::make_scene_dirty()
 void GlobalSignDistanceFieldPass::render()
 {
     bool need_upload = false;
-    float camera_distance = 10.0f;//_renderer->_camera->get_far();
+    float camera_distance = 100.0f;//_renderer->_camera->get_far();
     glm::vec3 camera_center = _renderer->_camera->get_translation();
     if (_scene_dirty || _view_distance != camera_distance || glm::distance(_view_center, camera_center) >= camera_distance * 0.1)
     {
@@ -103,6 +103,7 @@ void GlobalSignDistanceFieldPass::render()
     float voxel_size = (_view_distance * 2.0f) / (float)GLOBAL_SDF_RESOLUTION;
     float brick_size = voxel_size * GLOBAL_SDF_BRICK_SIZE;
 
+    // 更新_object_datas、_object_textures
     if (_scene_dirty)
     {
         _bricks.clear();
@@ -142,6 +143,8 @@ void GlobalSignDistanceFieldPass::render()
                     _object_datas.push_back(obj_data);
                     _object_textures.push_back(prim->sdf->texture);
 
+                    // 被object的boundingbox覆盖的brick被填充新object
+                    // global sdf的voxelsize = brick / 32;
                     uint32_t obj_idx = _object_datas.size() - 1;
                     for (int x = brick_min.x; x <= brick_max.x; ++x)
                     {
@@ -149,10 +152,10 @@ void GlobalSignDistanceFieldPass::render()
                         {
                             for (int z = brick_min.z; z <= brick_max.z; ++z)
                             {
-                                Brick* brick = &_bricks[glm::ivec3(x, y, z)];
+                                Brick* brick = &_bricks[glm::ivec3(x, y, z)];// bricks是用来向GPU传数据的最小单位
                                 if (brick->object_count >= GLOBAL_SDF_MAX_OBJECT_COUNT)
                                     continue;
-                                brick->objects[brick->object_count++] = obj_idx;
+                                brick->objects[brick->object_count++] = obj_idx;// 不是所有object都在这个brick里，只有在这个brick里的object才会被传到GPU
                             }
                         }
                     }
@@ -166,6 +169,7 @@ void GlobalSignDistanceFieldPass::render()
 
     if (need_upload)
     {
+        // 更新_upload_params_datas
         if (_bricks.size() > _upload_params_datas.size())
             _upload_params_datas.resize(_bricks.size());
         int upload_params_data_idx = 0;
@@ -184,6 +188,7 @@ void GlobalSignDistanceFieldPass::render()
             upload_params_data_idx++;
         }
 
+        // 创建object buffer
         if (!_objects_buffer || _objects_buffer->size < _object_datas.size() * sizeof(ObjectData))
         {
             if (_objects_buffer)
@@ -196,6 +201,7 @@ void GlobalSignDistanceFieldPass::render()
             ez_create_buffer(buffer_desc, _objects_buffer);
         }
 
+        // 创建upload params buffer
         if (!_upload_params_buffer || _upload_params_buffer->size < _upload_params_datas.size() * sizeof(UploadParamsType))
         {
             if (_upload_params_buffer)
@@ -208,6 +214,7 @@ void GlobalSignDistanceFieldPass::render()
             ez_create_buffer(buffer_desc, _upload_params_buffer);
         }
 
+        // 更新各buffer
         _global_sdf_data.bounds_position_distance = glm::vec4(_view_center, _view_distance);
         _global_sdf_data.voxel_size = voxel_size;
         _global_sdf_data.resolution = GLOBAL_SDF_RESOLUTION;
@@ -243,20 +250,26 @@ void GlobalSignDistanceFieldPass::render()
         ez_reset_pipeline_state();
         ez_set_compute_shader(ShaderManager::get()->get_shader("upload_global_sdf.comp"));
 
+        // 对每个brick执行upload_global_sdf.comp
         for (int i = 0; i < _bricks.size(); ++i)
         {
             auto& upload_params_data = _upload_params_datas[i];
             ez_bind_texture(0, _global_sdf_texture, 0);
+
+            // 绑定mesh sdf
             for (int j = 0; j < GLOBAL_SDF_MAX_OBJECT_COUNT; ++j)
             {
                 if (j < upload_params_data.object_count)
-                    ez_bind_texture_array(1, _object_textures[upload_params_data.objects[j]], 0, j);
+                    ez_bind_texture_array(1, _object_textures[upload_params_data.objects[j]], 0, j);// mesh sdf
                 else
                     ez_bind_texture_array(1, _empty_texture, 0, j);
             }
             ez_bind_sampler(2, _sampler);
+            // primitive，每个brick一样
             ez_bind_buffer(3, _objects_buffer, _objects_buffer->size);
+            // objectid，每个brick不一样
             ez_bind_buffer(4, _upload_params_buffer, sizeof(UploadParamsType), i * sizeof(UploadParamsType));
+            // 相当于每个voxel执行一次cs
             glm::ivec3 dispatch_groups(GLOBAL_SDF_BRICK_SIZE / 8);
             ez_dispatch(dispatch_groups.x, dispatch_groups.y, dispatch_groups.z);
         }

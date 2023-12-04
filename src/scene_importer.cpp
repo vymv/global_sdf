@@ -276,24 +276,23 @@ Scene* load_scene(const std::string& file_path)
 
             // SDF
             std::string sdf_cache_path = (file_root / "cache" / (path.stem().string() + "_" + std::to_string(i) + "#" + std::to_string(j) + ".json")).generic_string();
-
-            primitive->sdf = generate_sdf(primitive->bounds, 32, vertex_count, (float*)position_data, index_count, index_data, primitive->index_type, sdf_cache_path);
+            // SDF (保存在mesh->primitives和scene->primitives)
+            primitive->sdf = generate_sdf(primitive->bounds, MESH_SDF_RESOLUTION, vertex_count, (float*)position_data, index_count, index_data, primitive->index_type, sdf_cache_path);
         }
+    }
+    // Load nodes
+    for (size_t i = 0; i < data->nodes_count; ++i)
+    {
+        Node* node = new Node();
+        scene->nodes.push_back(node);
+        cgltf_node* cnode = &data->nodes[i];
 
-        // Load nodes
-        for (size_t i = 0; i < data->nodes_count; ++i)
-        {
-            Node* node = new Node();
-            scene->nodes.push_back(node);
-            cgltf_node* cnode = &data->nodes[i];
+        node->name = cnode->name;
 
-            node->name = cnode->name;
+        node->transform = get_world_matrix(cnode);
 
-            node->transform = get_world_matrix(cnode);
-
-            if (cnode->mesh)
-                node->mesh = mesh_helper[cnode->mesh];
-        }
+        if (cnode->mesh)
+            node->mesh = mesh_helper[cnode->mesh];
     }
     cgltf_free(data);
     return scene;

@@ -3,7 +3,7 @@
 
 #define GLOBAL_SDF_RESOLUTION 128
 #define GLOBAL_SDF_BRICK_SIZE 32
-#define GLOBAL_SDF_MAX_OBJECT_COUNT 16
+#define GLOBAL_SDF_MAX_OBJECT_COUNT 64
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 8) in;
 
@@ -36,7 +36,7 @@ layout(std140, binding = 4) buffer UploadParams
     float pad0;
     vec3 coord_to_pos_add;
     uint object_count;
-    uvec4 objects[GLOBAL_SDF_MAX_OBJECT_COUNT / 4];
+    uvec4 objects[GLOBAL_SDF_MAX_OBJECT_COUNT / 4];// object index
 };
 
 float combine_distance_to_sdf(float sdf, float distance)
@@ -51,12 +51,12 @@ float distance_to_object_sdf(float min_distance, ObjectData data, texture3D sdf_
     vec3 volume_to_world_scale = vec3(length(data.volume_to_world[0]), length(data.volume_to_world[1]), length(data.volume_to_world[2]));
     float volume_scale = min(volume_to_world_scale.x, min(volume_to_world_scale.y, volume_to_world_scale.z));
 
-    // Compute ditance to volume
+    // 计算distance_to_volume
     vec3 volume_pos = (data.world_to_volume * vec4(world_pos, 1.0)).xyz;
     vec3 volume_uv = volume_pos * data.volume_to_uvw_mul + data.volume_to_uvw_add;
     vec3 volume_pos_clamped = clamp(volume_pos, -data.volume_bounds_extent, data.volume_bounds_extent);
-    vec3 world_pos_clamped = (data.volume_to_world * vec4(volume_pos_clamped, 1.0)).xyz;
-    float distance_to_volume = distance(world_pos, world_pos_clamped);
+    vec3 world_pos_clamped = (data.volume_to_world * vec4(volume_pos_clamped, 1.0)).xyz;// 确保当前计算的voxel在object的volume之内，否则clamp进来
+    float distance_to_volume = distance(world_pos, world_pos_clamped);                  // 如果在volume之外，那么就是到volume的距离
 
     if (distance_to_volume < 0.01)
         distance_to_volume = length((volume_pos - volume_pos_clamped) * volume_to_world_scale);
@@ -64,24 +64,27 @@ float distance_to_object_sdf(float min_distance, ObjectData data, texture3D sdf_
 
     if (min_distance <= distance_to_volume) return distance_to_volume;
 
-    // Sample sdf
+    // 计算sdf_distance
     float sdf_distance = textureLod(sampler3D(sdf_texture, sdf_sampler), volume_uv, 0.0).r;
     sdf_distance *= volume_scale;
 
-    // Combine distance
+    // 结合两个距离
     float result = combine_distance_to_sdf(sdf_distance, distance_to_volume);
     if (distance_to_volume > 0)
     {
         result = max(distance_to_volume, result);
     }
     return result;
+    // return distance_to_volume;
 }
 
 void main()
 {
-    ivec3 voxel_coord = brick_coord * ivec3(GLOBAL_SDF_BRICK_SIZE)  + ivec3(gl_GlobalInvocationID);
+    // 对每个voxel
+    ivec3 voxel_coord = brick_coord * ivec3(GLOBAL_SDF_BRICK_SIZE) + ivec3(gl_GlobalInvocationID);
     vec3 voxel_world_pos = voxel_coord * coord_to_pos_mul + coord_to_pos_add;
     float min_distance = max_distance;
+    // 对每个mesh
     for (uint i = 0; i < object_count; i++)
     {
         uint object_idx = objects[i / 4][i % 4];
