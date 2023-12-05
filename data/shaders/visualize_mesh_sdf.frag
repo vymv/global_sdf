@@ -72,18 +72,18 @@ vec3 get_mesh_sdf_uv(vec3 world_position, int sdf_index)
     return clamp(position_in_bounds / bounding_size, vec3(0.0), vec3(1.0));
 }
 
-// vec3 get_mesh_sdf_uv_raw(vec3 world_position, int sdf_index)
-// {
-//     // 转换到模型坐标
-//     vec4 model_position = mesh_sdf_data.model_matrix_inv[sdf_index] * vec4(world_position, 1.0);
-//     // 转换boundingbox到模型坐标
-//     vec4 bounding_min = mesh_sdf_data.model_matrix_inv[sdf_index] * vec4(mesh_sdf_data.bounds_position[sdf_index].xyz - mesh_sdf_data.bounds_distance[sdf_index].xyz, 1.0);
-//     vec4 bounding_max = mesh_sdf_data.model_matrix_inv[sdf_index] * vec4(mesh_sdf_data.bounds_position[sdf_index].xyz + mesh_sdf_data.bounds_distance[sdf_index].xyz, 1.0);
-//     // 转换到uv坐标
-//     vec3 bounding_size = bounding_max.xyz - bounding_min.xyz;
-//     vec3 position_in_bounds = (model_position - bounding_min).xyz;
-//     position_in_bounds / bounding_size;
-// }
+vec3 get_mesh_sdf_uv_raw(vec3 world_position, int sdf_index)
+{
+    // 转换到模型坐标
+    vec4 model_position = mesh_sdf_data.model_matrix_inv[sdf_index] * vec4(world_position, 1.0);
+    // 转换boundingbox到模型坐标
+    vec4 bounding_min = mesh_sdf_data.model_matrix_inv[sdf_index] * vec4(mesh_sdf_data.bounds_position[sdf_index].xyz - mesh_sdf_data.bounds_distance[sdf_index].xyz, 1.0);
+    vec4 bounding_max = mesh_sdf_data.model_matrix_inv[sdf_index] * vec4(mesh_sdf_data.bounds_position[sdf_index].xyz + mesh_sdf_data.bounds_distance[sdf_index].xyz, 1.0);
+    // 转换到uv坐标
+    vec3 bounding_size = bounding_max.xyz - bounding_min.xyz;
+    vec3 position_in_bounds = (model_position - bounding_min).xyz;
+    return position_in_bounds / bounding_size;
+}
 
 bool in_bounding_box(vec3 world_position, int sdf_index)
 {
@@ -127,7 +127,12 @@ HitResult ray_trace(Ray ray, int sdf_index)
     {
         vec3 step_position = world_position + ray.world_direction * step_time;// step_time 累计步进长度
 
-        vec3 uv = get_mesh_sdf_uv(step_position, sdf_index);
+        vec3 uv = get_mesh_sdf_uv_raw(step_position, sdf_index);
+        if(uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0 || uv.z < 0.0 || uv.z > 1.0)
+        {
+            step_time += voxel_size;// voxel_size 每次步进长度
+            continue;
+        }
         float sdf_distance = textureLod(sampler3D(mesh_sdf_textures[sdf_index], sdf_sampler), uv, 0.0).r;// 光线当前步进到的位置
         float min_surface_thickness = 1e-5;
         if (sdf_distance < min_surface_thickness)// 如果接近物体表面，或者进入物体内部
@@ -145,7 +150,7 @@ HitResult ray_trace(Ray ray, int sdf_index)
         //     break;
         // }
 
-        step_time += voxel_size;// voxel_size 每次步进长度
+        step_time += voxel_size/10;// voxel_size 每次步进长度
     }
 
     return hit;

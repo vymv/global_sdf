@@ -96,6 +96,7 @@ void GlobalSignDistanceFieldPass::render()
                     BoundingBox volume_bounds = prim->sdf->bounds;
                     volume_bounds = get_bounds(volume_bounds, node->transform);
 
+                    //new bounding box not correct
                     BoundingBox object_bounds = volume_bounds;
                     object_bounds.bb_min = glm::clamp(volume_bounds.bb_min, view_bounds.bb_min, view_bounds.bb_max);
                     object_bounds.bb_min = object_bounds.bb_min - view_bounds.bb_min;

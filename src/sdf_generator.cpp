@@ -1,4 +1,6 @@
 #include "sdf_generator.h"
+#include "glm/detail/qualifier.hpp"
+#include "glm/ext/scalar_constants.hpp"
 #include <algorithm>
 #include <execution>
 #include <math/detection.h>
@@ -7,6 +9,81 @@
 
 #include <nlohmann/json.hpp>
 using json = nlohmann::json;
+
+glm::vec3 closest_point_on_triangle_m(const glm::vec3& p, const glm::vec3& v0, const glm::vec3& v1, const glm::vec3& v2)
+{
+    glm::vec3 edge0 = v1 - v0;
+    glm::vec3 edge1 = v2 - v0;
+    glm::vec3 v0p = p - v0;
+
+    float dot00 = glm::dot(edge0, edge0);
+    float dot01 = glm::dot(edge0, edge1);
+    float dot11 = glm::dot(edge1, edge1);
+    float dot0p = glm::dot(edge0, v0p);
+    float dot1p = glm::dot(edge1, v0p);
+
+    float denom = dot00 * dot11 - dot01 * dot01;
+
+    float u = (dot11 * dot0p - dot01 * dot1p) / denom;
+    float v = (dot00 * dot1p - dot01 * dot0p) / denom;
+
+    if (u >= 0 && v >= 0 && u + v <= 1)
+    {
+        return v0 + u * edge0 + v * edge1;
+    }
+    else
+    {
+        // If the closest point is outside the triangle, return the closest vertex
+        float dist0 = glm::distance(p, v0);
+        float dist1 = glm::distance(p, v1);
+        float dist2 = glm::distance(p, v2);
+
+        if (dist0 <= dist1 && dist0 <= dist2)
+        {
+            return v0;
+        }
+        else if (dist1 <= dist0 && dist1 <= dist2)
+        {
+            return v1;
+        }
+        else
+        {
+            return v2;
+        }
+    }
+}
+glm::vec3 calculateBarycentricCoordinates(const glm::vec3& A, const glm::vec3& B, const glm::vec3& C, const glm::vec3& P)
+{
+    glm::vec3 v0 = B - A;
+    glm::vec3 v1 = C - A;
+    glm::vec3 v2 = P - A;
+
+    float d00 = glm::dot(v0, v0);
+    float d01 = glm::dot(v0, v1);
+    float d11 = glm::dot(v1, v1);
+    float d20 = glm::dot(v2, v0);
+    float d21 = glm::dot(v2, v1);
+
+    float denom = d00 * d11 - d01 * d01;
+
+    // Check if the denominator is close to zero
+    if (glm::abs(denom) < glm::epsilon<float>())
+    {
+        // Handle division by zero error, return a default value or take appropriate action
+        // std::cerr << "Error: Denominator is zero." << std::endl;
+        return glm::vec3(0.0f);
+    }
+
+    float v = (d11 * d20 - d01 * d21) / denom;
+    float w = (d00 * d21 - d01 * d20) / denom;
+    float u = 1.0f - v - w;
+
+    return glm::vec3(u, v, w);
+}
+glm::vec3 interpolateNormals(const glm::vec3& normalA, const glm::vec3& normalB, const glm::vec3& normalC, const glm::vec3& barycentricCoords)
+{
+    return barycentricCoords.x * normalA + barycentricCoords.y * normalB + barycentricCoords.z * normalC;
+}
 namespace glm
 {
 using json = nlohmann::json;
@@ -61,7 +138,7 @@ void from_json(const json& j, SDFCache& sdf)
     j.at("voxel_data").get_to(sdf.voxel_data);
 }
 
-SDF* generate_sdf(const BoundingBox& bounds, uint32_t resolution, uint32_t vertex_count, float* vertices, uint32_t index_count, uint8_t* indices, VkIndexType index_type, const std::string& file_path)
+SDF* generate_sdf(const BoundingBox& bounds, uint32_t resolution, uint32_t vertex_count, float* vertices, float* normal_data, uint32_t index_count, uint8_t* indices, VkIndexType index_type, const std::string& file_path)
 {
 
     SDF* sdf;
@@ -107,7 +184,7 @@ SDF* generate_sdf(const BoundingBox& bounds, uint32_t resolution, uint32_t verte
     {
         indices_16 = (uint16_t*)indices;
     }
-    std::for_each(std::execution::par, voxel_data.data(), voxel_data.data() + resolution * resolution * resolution, [&](float& v)
+    std::for_each(voxel_data.data(), voxel_data.data() + resolution * resolution * resolution, [&](float& v)
                   {
                       int index = &v - voxel_data.data();
                       int z = index % resolution;
@@ -123,11 +200,15 @@ SDF* generate_sdf(const BoundingBox& bounds, uint32_t resolution, uint32_t verte
                       int idx1;
                       int idx2;
 
+                      glm::vec3 closeset_point;
+                      glm::vec3 hit_normal;
+
                       //   uint32_t hit_back_count = 0, hit_count = 0;
                       bool hit_back = false;
                       // 对这个mesh中的每个三角面片
                       for (int i = 0; i < index_count; i += 3)
                       {
+
                           if (index_type == VK_INDEX_TYPE_UINT32)
                           {
                               idx0 = (int)indices_32[i];
@@ -144,16 +225,31 @@ SDF* generate_sdf(const BoundingBox& bounds, uint32_t resolution, uint32_t verte
                           glm::vec3 v0(vertices[idx0 * 3], vertices[idx0 * 3 + 1], vertices[idx0 * 3 + 2]);
                           glm::vec3 v1(vertices[idx1 * 3], vertices[idx1 * 3 + 1], vertices[idx1 * 3 + 2]);
                           glm::vec3 v2(vertices[idx2 * 3], vertices[idx2 * 3 + 1], vertices[idx2 * 3 + 2]);
-                          glm::vec3 p = closest_point_on_triangle(voxel_pos, v0, v1, v2);
+
+                          glm::vec3 n0;
+                          glm::vec3 n1;
+                          glm::vec3 n2;
+                          if (normal_data == nullptr)
+                          {
+                              n0 = n1 = n2 = glm::normalize(glm::cross(v1 - v0, v2 - v0));
+                          }
+                          else
+                          {
+                              n0 = glm::vec3(normal_data[idx0 * 3], normal_data[idx0 * 3 + 1], normal_data[idx0 * 3 + 2]);
+                              n1 = glm::vec3(normal_data[idx1 * 3], normal_data[idx1 * 3 + 1], normal_data[idx1 * 3 + 2]);
+                              n2 = glm::vec3(normal_data[idx2 * 3], normal_data[idx2 * 3 + 1], normal_data[idx2 * 3 + 2]);
+                          }
+
+                          glm::vec3 p = closest_point_on_triangle_m(voxel_pos, v0, v1, v2);
                           float distance = glm::distance(p, voxel_pos);
                           if (hit_distance >= distance)
                           {
                               hit = true;
                               hit_distance = distance;
                               hit_position = p;
-
-                              glm::vec3 normal = glm::normalize(glm::cross(v1 - v0, v2 - v0));
-                              hit_back = glm::dot(normal, voxel_pos - p) > 0;
+                              closeset_point = p;
+                              hit_normal = interpolateNormals(n0, n1, n2, calculateBarycentricCoordinates(v0, v1, v2, p));
+                              hit_back = glm::dot(hit_normal, voxel_pos - p) > 0;
                           }
                       }
                       if (hit)

@@ -277,7 +277,7 @@ Scene* load_scene(const std::string& file_path)
             // SDF
             std::string sdf_cache_path = (file_root / "cache" / (path.stem().string() + "_" + std::to_string(i) + "#" + std::to_string(j) + ".json")).generic_string();
             // SDF (保存在mesh->primitives和scene->primitives)
-            primitive->sdf = generate_sdf(primitive->bounds, MESH_SDF_RESOLUTION, vertex_count, (float*)position_data, index_count, index_data, primitive->index_type, sdf_cache_path);
+            primitive->sdf = generate_sdf(primitive->bounds, MESH_SDF_RESOLUTION, vertex_count, (float*)position_data, (float*)normal_data, index_count, index_data, primitive->index_type, sdf_cache_path);
         }
     }
     // Load nodes
