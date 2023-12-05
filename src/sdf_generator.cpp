@@ -119,10 +119,12 @@ SDF* generate_sdf(const BoundingBox& bounds, uint32_t resolution, uint32_t verte
                       bool hit = false;
                       float hit_distance = INF;
                       glm::vec3 hit_position;
-                      glm::vec3 hit_normal;
                       int idx0;
                       int idx1;
                       int idx2;
+
+                      //   uint32_t hit_back_count = 0, hit_count = 0;
+                      bool hit_back = false;
                       // 对这个mesh中的每个三角面片
                       for (int i = 0; i < index_count; i += 3)
                       {
@@ -149,61 +151,70 @@ SDF* generate_sdf(const BoundingBox& bounds, uint32_t resolution, uint32_t verte
                               hit = true;
                               hit_distance = distance;
                               hit_position = p;
+
+                              glm::vec3 normal = glm::normalize(glm::cross(v1 - v0, v2 - v0));
+                              hit_back = glm::dot(normal, voxel_pos - p) > 0;
                           }
                       }
                       if (hit)
                       {
                           min_distance = hit_distance;// 找到离voxel_pos最近的三角面片，计算距离
+                          if (hit_back)
+                          {
+                              min_distance *= -1;
+                          }
                       }
 
-                      uint32_t hit_back_count = 0, hit_count = 0;
-
+                      //   if (hit_back_count > 0)
+                      //   {
+                      //       min_distance *= -1;
+                      //   }
                       // 朝六个方向trace ray，判断sdf符号
-                      for (int sample = 0; sample < sample_count; sample++)
-                      {
-                          hit = false;
-                          hit_distance = INF;
-                          glm::vec3 ro = voxel_pos;
-                          glm::vec3 rd = sample_directions[sample];
+                      //   for (int sample = 0; sample < sample_count; sample++)
+                      //   {
+                      //       hit = false;
+                      //       hit_distance = INF;
+                      //       glm::vec3 ro = voxel_pos;
+                      //       glm::vec3 rd = sample_directions[sample];
 
-                          for (int i = 0; i < index_count; i += 3)
-                          {
-                              if (index_type == VK_INDEX_TYPE_UINT32)
-                              {
-                                  idx0 = (int)indices_32[i];
-                                  idx1 = (int)indices_32[i + 1];
-                                  idx2 = (int)indices_32[i + 2];
-                              }
-                              else
-                              {
-                                  idx0 = (int)indices_16[i];
-                                  idx1 = (int)indices_16[i + 1];
-                                  idx2 = (int)indices_16[i + 2];
-                              }
+                      //       for (int i = 0; i < index_count; i += 3)
+                      //       {
+                      //           if (index_type == VK_INDEX_TYPE_UINT32)
+                      //           {
+                      //               idx0 = (int)indices_32[i];
+                      //               idx1 = (int)indices_32[i + 1];
+                      //               idx2 = (int)indices_32[i + 2];
+                      //           }
+                      //           else
+                      //           {
+                      //               idx0 = (int)indices_16[i];
+                      //               idx1 = (int)indices_16[i + 1];
+                      //               idx2 = (int)indices_16[i + 2];
+                      //           }
 
-                              glm::vec3 v0(vertices[idx0 * 3], vertices[idx0 * 3 + 1], vertices[idx0 * 3 + 2]);
-                              glm::vec3 v1(vertices[idx1 * 3], vertices[idx1 * 3 + 1], vertices[idx1 * 3 + 2]);
-                              glm::vec3 v2(vertices[idx2 * 3], vertices[idx2 * 3 + 1], vertices[idx2 * 3 + 2]);
+                      //           glm::vec3 v0(vertices[idx0 * 3], vertices[idx0 * 3 + 1], vertices[idx0 * 3 + 2]);
+                      //           glm::vec3 v1(vertices[idx1 * 3], vertices[idx1 * 3 + 1], vertices[idx1 * 3 + 2]);
+                      //           glm::vec3 v2(vertices[idx2 * 3], vertices[idx2 * 3 + 1], vertices[idx2 * 3 + 2]);
 
-                              if (ray_intersect_triangle(ro, rd, v0, v1, v2, hit_distance))
-                              {
-                                  hit = true;
-                                  hit_normal = glm::normalize(glm::cross(v1 - v0, v2 - v0));
-                              }
-                          }
+                      //           if (ray_intersect_triangle(ro, rd, v0, v1, v2, hit_distance))
+                      //           {
+                      //               hit = true;
+                      //               hit_normal = glm::normalize(glm::cross(v1 - v0, v2 - v0));
+                      //           }
+                      //       }
 
-                          if (hit)
-                          {
-                              hit_count++;
-                              if (glm::dot(rd, hit_normal) > 0)
-                                  hit_back_count++;
-                          }
-                      }
+                      //       if (hit)
+                      //       {
+                      //           hit_count++;
+                      //           if (glm::dot(rd, hit_normal) > 0)
+                      //               hit_back_count++;
+                      //       }
+                      //   }
 
-                      if ((float)hit_back_count > (float)sample_count * 0.2f && hit_count != 0)
-                      {
-                          min_distance *= -1;
-                      }
+                      //   if ((float)hit_back_count > (float)sample_count * 0.2f && hit_count != 0)
+                      //   {
+                      //       min_distance *= -1;
+                      //   }
                       uint32_t z_address = resolution * resolution * z;
                       uint32_t y_address = resolution * y + z_address;
                       uint32_t x_address = x + y_address;

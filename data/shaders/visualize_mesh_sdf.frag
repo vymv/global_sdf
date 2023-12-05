@@ -72,6 +72,19 @@ vec3 get_mesh_sdf_uv(vec3 world_position, int sdf_index)
     return clamp(position_in_bounds / bounding_size, vec3(0.0), vec3(1.0));
 }
 
+// vec3 get_mesh_sdf_uv_raw(vec3 world_position, int sdf_index)
+// {
+//     // 转换到模型坐标
+//     vec4 model_position = mesh_sdf_data.model_matrix_inv[sdf_index] * vec4(world_position, 1.0);
+//     // 转换boundingbox到模型坐标
+//     vec4 bounding_min = mesh_sdf_data.model_matrix_inv[sdf_index] * vec4(mesh_sdf_data.bounds_position[sdf_index].xyz - mesh_sdf_data.bounds_distance[sdf_index].xyz, 1.0);
+//     vec4 bounding_max = mesh_sdf_data.model_matrix_inv[sdf_index] * vec4(mesh_sdf_data.bounds_position[sdf_index].xyz + mesh_sdf_data.bounds_distance[sdf_index].xyz, 1.0);
+//     // 转换到uv坐标
+//     vec3 bounding_size = bounding_max.xyz - bounding_min.xyz;
+//     vec3 position_in_bounds = (model_position - bounding_min).xyz;
+//     position_in_bounds / bounding_size;
+// }
+
 bool in_bounding_box(vec3 world_position, int sdf_index)
 {
     vec3 bounds_distance = mesh_sdf_data.bounds_distance[sdf_index].xyz;
@@ -132,7 +145,7 @@ HitResult ray_trace(Ray ray, int sdf_index)
         //     break;
         // }
 
-        step_time += voxel_size / 10.0;// voxel_size 每次步进长度
+        step_time += voxel_size;// voxel_size 每次步进长度
     }
 
     return hit;
@@ -153,7 +166,7 @@ void main()
     float min_distance = mesh_sdf_data.global_sdf_distance;
     for (int i = 0; i < mesh_sdf_data.sdf_count; ++i)
     {
-        HitResult hit = ray_trace(ray, 0);
+        HitResult hit = ray_trace(ray, i);
         if (hit.hit_time < min_distance && hit.hit_time > 0.0)
         {
             min_distance = hit.hit_time;
