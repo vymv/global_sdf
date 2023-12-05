@@ -17,8 +17,8 @@ public:
 private:
     struct MeshSignDistanceFieldData
     {
-        glm::vec3 bounds_position[GLOBAL_SDF_MAX_OBJECT_COUNT];
-        glm::vec3 bounds_distance[GLOBAL_SDF_MAX_OBJECT_COUNT];
+        glm::vec4 bounds_position[GLOBAL_SDF_MAX_OBJECT_COUNT];
+        glm::vec4 bounds_distance[GLOBAL_SDF_MAX_OBJECT_COUNT];
         float resolution;
         float global_sdf_distance;
         int mesh_count;
