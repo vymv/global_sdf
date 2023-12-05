@@ -1,6 +1,8 @@
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
 #define GLOBAL_SDF_MAX_OBJECT_COUNT 64
+#define MAX_STEP_COUNT 128
+#define MAX_DISTANCE 1024.f
 layout(location = 0) in vec2 in_texcoord;
 layout(location = 0) out vec4 out_color;
 
@@ -111,9 +113,9 @@ HitResult ray_trace(Ray ray, int sdf_index)
     // 如果和bounding box相交，直接从bounding box开始步进
     float step_time = intersections.x;
     hit.color = vec3(0.0, 0.0, 0.0);
-    hit.hit_time = step_time;
-    hit.color = world_position + ray.world_direction * step_time;
-    for (float step_i = 0.0; step_i < mesh_sdf_data.resolution; ++step_i)
+    hit.hit_time = MAX_DISTANCE;
+    // hit.color = world_position + ray.world_direction * step_time;
+    for (float step_i = 0.0; step_i < MAX_STEP_COUNT; ++step_i)
     {
         vec3 step_position = world_position + ray.world_direction * step_time;// step_time 累计步进长度
 
@@ -121,7 +123,7 @@ HitResult ray_trace(Ray ray, int sdf_index)
 
         if (uv.x < 0 || uv.x > 1 || uv.y < 0 || uv.y > 1 || uv.z < 0 || uv.z > 1)
         {
-            step_time += voxel_size / 100;// voxel_size 每次步进长度
+            step_time += voxel_size;// voxel_size 每次步进长度
             continue;
         }
         float sdf_distance = textureLod(sampler3D(mesh_sdf_textures[sdf_index], sdf_sampler), uv, 0.0).r;// 光线当前步进到的位置
@@ -135,7 +137,7 @@ HitResult ray_trace(Ray ray, int sdf_index)
             break;
         }
 
-        step_time += voxel_size / 100;// voxel_size 每次步进长度
+        step_time += voxel_size;// voxel_size 每次步进长度
     }
 
     return hit;
@@ -153,15 +155,16 @@ void main()
     ray.world_direction = normalize(target_position.xyz - view_buffer.view_position.xyz);
 
     out_color = vec4(1.0, 1.0, 1.0, 1.0);
-    float min_distance = mesh_sdf_data.global_sdf_distance;
+    float min_distance = MAX_DISTANCE;
     for (int i = 0; i < mesh_sdf_data.sdf_count; ++i)
     {
         HitResult hit = ray_trace(ray, i);
         if (hit.hit_time < min_distance && hit.hit_time > 0.0)
         {
             min_distance = hit.hit_time;
-            out_color = vec4(hit.color, 1.0);
+            // out_color = vec4(hit.color, 1.0);
             // out_color = vec4(vec3(hit.step_count / mesh_sdf_data.resolution), 1.0);
         }
     }
+    out_color = vec4(vec3(1.f) * (min_distance / MAX_DISTANCE), 1.0);
 }

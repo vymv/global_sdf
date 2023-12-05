@@ -54,7 +54,7 @@ void VisualizeMeshSignDistanceFieldPass::render()
                 BoundingBox volume_bounds = prim->sdf->bounds;
                 volume_bounds = get_bounds(volume_bounds, node->transform);
                 glm::vec3 volume_bounds_half_size = volume_bounds.get_size() * 0.5f;
-                _upload_meshsdf_datas.world_to_volume[upload_meshsdf_id] = glm::translate(glm::mat4(1.0f), -(volume_bounds.bb_min + volume_bounds_half_size));
+                _upload_meshsdf_datas.world_to_volume[upload_meshsdf_id] = glm::inverse(node->transform);
                 _upload_meshsdf_datas.volume_to_uvw_add[upload_meshsdf_id] = glm::vec4(prim->sdf->local_to_uvw_add, 1.0f);
                 _upload_meshsdf_datas.volume_to_uvw_mul[upload_meshsdf_id] = glm::vec4(prim->sdf->local_to_uvw_mul, 1.0f);
                 _upload_meshsdf_datas.bounds_position[upload_meshsdf_id] = glm::vec4(volume_bounds.get_center(), 0.0f);
