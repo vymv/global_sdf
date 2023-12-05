@@ -53,7 +53,7 @@ void VisualizeMeshSignDistanceFieldPass::render()
                 volume_bounds = get_bounds(volume_bounds, node->transform);
                 _upload_meshsdf_datas.bounds_position[upload_meshsdf_id] = glm::vec4(volume_bounds.get_center(), 0.0f);
                 _upload_meshsdf_datas.bounds_distance[upload_meshsdf_id] = glm::vec4(volume_bounds.get_size() / 2.0f, 0.0f);
-
+                _upload_meshsdf_datas.model_matrix_inv[upload_meshsdf_id] = glm::inverse(node->transform);
                 upload_meshsdf_id++;
                 if (upload_meshsdf_id == GLOBAL_SDF_MAX_OBJECT_COUNT)
                     break;
