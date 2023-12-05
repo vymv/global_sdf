@@ -1,9 +1,11 @@
 #include "visualize_meshsdf_pass.h"
+#include "camera.h"
 #include "geometry_manager.h"
 #include "global_sdf_pass.h"
 #include "renderer.h"
 #include "scene.h"
 #include "shader_manager.h"
+#include <math/bounding_box.h>
 
 VisualizeMeshSignDistanceFieldPass::VisualizeMeshSignDistanceFieldPass(Renderer* renderer)
 {
@@ -51,9 +53,13 @@ void VisualizeMeshSignDistanceFieldPass::render()
                 _object_textures.push_back(prim->sdf->texture);
                 BoundingBox volume_bounds = prim->sdf->bounds;
                 volume_bounds = get_bounds(volume_bounds, node->transform);
+                glm::vec3 volume_bounds_half_size = volume_bounds.get_size() * 0.5f;
+                _upload_meshsdf_datas.world_to_volume[upload_meshsdf_id] = glm::translate(glm::mat4(1.0f), -(volume_bounds.bb_min + volume_bounds_half_size));
+                _upload_meshsdf_datas.volume_to_uvw_add[upload_meshsdf_id] = glm::vec4(prim->sdf->local_to_uvw_add, 1.0f);
+                _upload_meshsdf_datas.volume_to_uvw_mul[upload_meshsdf_id] = glm::vec4(prim->sdf->local_to_uvw_mul, 1.0f);
                 _upload_meshsdf_datas.bounds_position[upload_meshsdf_id] = glm::vec4(volume_bounds.get_center(), 0.0f);
                 _upload_meshsdf_datas.bounds_distance[upload_meshsdf_id] = glm::vec4(volume_bounds.get_size() / 2.0f, 0.0f);
-                _upload_meshsdf_datas.model_matrix_inv[upload_meshsdf_id] = glm::inverse(node->transform);
+                // _upload_meshsdf_datas.model_matrix_inv[upload_meshsdf_id] = glm::inverse(node->transform);
                 upload_meshsdf_id++;
                 if (upload_meshsdf_id == GLOBAL_SDF_MAX_OBJECT_COUNT)
                     break;
