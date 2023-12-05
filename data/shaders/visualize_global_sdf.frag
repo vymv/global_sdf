@@ -90,7 +90,7 @@ HitResult ray_trace(Ray ray)
             break;
         }
         float sdf_distance = textureLod(sampler3D(global_sdf_texture, sdf_sampler), uv, 0.0).r * max_distance;
-        float min_surface_thickness = 0.1;
+        float min_surface_thickness = 0.23;
         if (sdf_distance < min_surface_thickness)// 如果接近物体表面，或者进入物体内部
         {
             hit.hit_time = max(total_distance + sdf_distance - min_surface_thickness, 0.0);

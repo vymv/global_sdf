@@ -111,11 +111,16 @@ void GlobalSignDistanceFieldPass::render()
                     world_to_volume = glm::translate(glm::mat4(1.0f), -(volume_bounds.bb_min + volume_bounds_half_size));
                     volume_to_world = glm::inverse(world_to_volume);
                     glm::vec3 volume_to_uvw_mul = prim->sdf->local_to_uvw_mul;
-                    glm::vec3 volume_to_uvw_add = prim->sdf->local_to_uvw_add + (volume_bounds.bb_min + volume_bounds_half_size) * prim->sdf->local_to_uvw_mul;
-
+                    // glm::vec3 volume_to_uvw_add = prim->sdf->local_to_uvw_add + (volume_bounds.bb_min + volume_bounds_half_size) * prim->sdf->local_to_uvw_mul;
+                    glm::vec3 volume_to_uvw_add = prim->sdf->local_to_uvw_add;
+                    glm::mat4 world_to_model = glm::inverse(node->transform);
+                    {
+                    }
                     ObjectData obj_data{};
-                    obj_data.world_to_volume = world_to_volume;
-                    obj_data.volume_to_world = volume_to_world;
+                    // obj_data.world_to_volume = world_to_volume;
+                    // obj_data.volume_to_world = volume_to_world;
+                    obj_data.world_to_volume = world_to_model;
+                    obj_data.volume_to_world = node->transform;
                     obj_data.volume_to_uvw_mul = volume_to_uvw_mul;
                     obj_data.volume_to_uvw_add = volume_to_uvw_add;
                     obj_data.volume_bounds_extent = volume_bounds_half_size;

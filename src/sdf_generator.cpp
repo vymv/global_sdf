@@ -157,7 +157,7 @@ SDF* generate_sdf(const BoundingBox& bounds, uint32_t resolution, uint32_t verte
     glm::vec3 bounds_size = bounds.get_size();
     glm::vec3 uvw_to_local_mul = bounds_size;
     glm::vec3 uvw_to_local_add = bounds.bb_min;
-    glm::vec3 xyz_to_local_mul = uvw_to_local_mul / glm::vec3((float)(resolution - 1));
+    glm::vec3 xyz_to_local_mul = uvw_to_local_mul / glm::vec3((float)(resolution));
     glm::vec3 xyz_to_local_add = uvw_to_local_add;
     sdf->local_to_uvw_mul = 1.0f / uvw_to_local_mul;
     sdf->local_to_uvw_add = -uvw_to_local_add / uvw_to_local_mul;
@@ -184,7 +184,7 @@ SDF* generate_sdf(const BoundingBox& bounds, uint32_t resolution, uint32_t verte
     {
         indices_16 = (uint16_t*)indices;
     }
-    std::for_each(voxel_data.data(), voxel_data.data() + resolution * resolution * resolution, [&](float& v)
+    std::for_each(std::execution::par, voxel_data.data(), voxel_data.data() + resolution * resolution * resolution, [&](float& v)
                   {
                       int index = &v - voxel_data.data();
                       int z = index % resolution;
