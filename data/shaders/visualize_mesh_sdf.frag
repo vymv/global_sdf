@@ -39,9 +39,10 @@ struct Ray
 
 struct HitResult
 {
+    vec3 color;
     float hit_time;
     float step_count;
-    vec3 color;
+
 };
 
 vec2 line_hit_box(vec3 line_start, vec3 line_end, vec3 box_min, vec3 box_max)
@@ -71,6 +72,13 @@ bool in_bounding_box(vec3 world_position, int sdf_index)
     vec3 position_in_bounds = world_position - bounds_position;
     return all(lessThan(abs(position_in_bounds), bounds_distance));
 }
+
+vec3 sample_mesh_sdf(vec3 world_position, int sdf_index)
+{
+    vec3 uv = get_mesh_sdf_uv(world_position, sdf_index);
+    return textureLod(sampler3D(mesh_sdf_textures[sdf_index], sdf_sampler), uv, 0.0).xyz;
+}
+
 HitResult ray_trace(Ray ray, int sdf_index)
 {
     HitResult hit;

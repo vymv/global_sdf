@@ -61,10 +61,17 @@ vec3 get_global_sdf_uv(vec3 world_position)
     return clamp(position_in_bounds / max_distance + 0.5, vec3(0.0), vec3(1.0));
 }
 
+vec3 get_global_sdf_uv_raw(vec3 world_position)
+{
+    float max_distance = global_sdf_data.bounds_position_distance.w * 2.0;
+    vec3 position_in_bounds = world_position - global_sdf_data.bounds_position_distance.xyz;
+    return position_in_bounds / max_distance + 0.5;
+}
+
 HitResult ray_trace(Ray ray)
 {
     HitResult hit;
-    hit.hit_time = -1.0;
+    
 
     float bounds_distance = global_sdf_data.bounds_position_distance.w;
     vec3 bounds_position = global_sdf_data.bounds_position_distance.xyz;
@@ -72,33 +79,58 @@ HitResult ray_trace(Ray ray)
     float voxel_size = max_distance / global_sdf_data.resolution;
     vec3 end_position = ray.world_position + ray.world_direction * max_distance;
     vec3 world_position = ray.world_position;
-    vec2 intersections = line_hit_box(world_position, end_position, bounds_position - bounds_distance, bounds_position + bounds_distance);
-    intersections *= max_distance;
-    if (intersections.x >= intersections.y)
-        return hit;
 
-    float step_time = intersections.x;
-    for (float step = 0.0; step < global_sdf_data.resolution; ++step)
-    {
-        if (step_time > intersections.y)
-        {
-            hit.step_count = step;
+    hit.hit_time = max_distance;
+
+    float total_distance = 0;
+    for(int i = 0; i < global_sdf_data.resolution; i++){
+        vec3 step_position = ray.world_position + ray.world_direction * total_distance;
+        vec3 uv = get_global_sdf_uv_raw(step_position);
+        if(uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0 || uv.z < 0.0 || uv.z > 1.0){
             break;
         }
-
-        vec3 step_position = world_position + ray.world_direction * step_time;// step_time 累计步进长度
-        vec3 uv = get_global_sdf_uv(step_position);
-        float sdf_distance = textureLod(sampler3D(global_sdf_texture, sdf_sampler), uv, 0.0).r * max_distance;// 光线当前步进到的位置
+        float sdf_distance = textureLod(sampler3D(global_sdf_texture, sdf_sampler), uv, 0.0).r * max_distance;
         float min_surface_thickness = 0.1;
         if (sdf_distance < min_surface_thickness)// 如果接近物体表面，或者进入物体内部
         {
-            hit.hit_time = max(step_time + sdf_distance - min_surface_thickness, 0.0);
-            hit.step_count = step;
+            hit.hit_time = max(total_distance + sdf_distance - min_surface_thickness, 0.0);
+            hit.step_count = i;
             break;
         }
-
-        step_time += voxel_size;// voxel_size 每次步进长度
+        total_distance += global_sdf_data.voxel_size;
+        if(total_distance > max_distance){
+            break;
+        }
     }
+
+
+    // vec2 intersections = line_hit_box(world_position, end_position, bounds_position - bounds_distance, bounds_position + bounds_distance);
+    // intersections *= max_distance;
+    // if (intersections.x >= intersections.y)
+    //     return hit;
+
+    // float step_time = intersections.x;
+    // for (float step = 0.0; step < global_sdf_data.resolution; ++step)
+    // {
+    //     if (step_time > intersections.y)
+    //     {
+    //         hit.step_count = step;
+    //         break;
+    //     }
+
+    //     vec3 step_position = world_position + ray.world_direction * step_time;// step_time 累计步进长度
+    //     vec3 uv = get_global_sdf_uv(step_position);
+    //     float sdf_distance = textureLod(sampler3D(global_sdf_texture, sdf_sampler), uv, 0.0).r * max_distance;// 光线当前步进到的位置
+    //     float min_surface_thickness = 0.1;
+    //     if (sdf_distance < min_surface_thickness)// 如果接近物体表面，或者进入物体内部
+    //     {
+    //         hit.hit_time = max(step_time + sdf_distance - min_surface_thickness, 0.0);
+    //         hit.step_count = step;
+    //         break;
+    //     }
+
+    //     step_time += voxel_size;// voxel_size 每次步进长度
+    // }
 
     return hit;
 }
@@ -114,6 +146,7 @@ void main()
     ray.world_position = view_buffer.view_position.xyz;
     ray.world_direction = normalize(target_position.xyz - view_buffer.view_position.xyz);
     HitResult hit = ray_trace(ray);
+    float max_distance = global_sdf_data.bounds_position_distance.w * 2.0;
 
-    out_color = vec4(vec3(hit.step_count / global_sdf_data.resolution), 1.0);// 根据步进的远近决定颜色，介于01之间
+    out_color = vec4(vec3(hit.hit_time / max_distance), 1.0);// 根据步进的远近决定颜色，介于01之间
 }
