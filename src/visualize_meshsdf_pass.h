@@ -19,6 +19,7 @@ private:
     {
         glm::vec4 bounds_position[GLOBAL_SDF_MAX_OBJECT_COUNT];
         glm::vec4 bounds_distance[GLOBAL_SDF_MAX_OBJECT_COUNT];
+        glm::mat4 model_matrix_inv[GLOBAL_SDF_MAX_OBJECT_COUNT];
         float resolution;
         float global_sdf_distance;
         int mesh_count;
