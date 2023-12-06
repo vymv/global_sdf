@@ -60,7 +60,7 @@ int main()
     CameraController* camera_controller = new CameraController();
     camera_controller->set_camera(camera);
     // Scene* scene = load_scene(std::string(PROJECT_DIR) + "/data/scenes/test/test.gltf");
-    Scene* scene = load_scene(std::string(PROJECT_DIR) + "/data/scenes/test/y_20.gltf");
+    Scene* scene = load_scene(std::string(PROJECT_DIR) + "/data/scenes/test/y21.gltf");
     Renderer* renderer = new Renderer();
     renderer->set_scene(scene);
     renderer->set_camera(camera);

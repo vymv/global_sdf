@@ -167,7 +167,7 @@ void GlobalSignDistanceFieldPass::render()
             upload_params_data.object_count = brick.second.object_count;
             for (int i = 0; i < brick.second.object_count; ++i)
             {
-                upload_params_data.objects[i] = brick.second.objects[i];
+                upload_params_data.objects[i / 4][i % 4] = brick.second.objects[i];
             }
             upload_params_data_idx++;
         }
@@ -234,20 +234,32 @@ void GlobalSignDistanceFieldPass::render()
         ez_reset_pipeline_state();
         ez_set_compute_shader(ShaderManager::get()->get_shader("upload_global_sdf.comp"));
 
+        // 绑定mesh sdf
+        int sdf_count = 0;
+        for (auto node : _renderer->_scene->nodes)
+        {
+            if (node->mesh)
+            {
+                for (auto prim : node->mesh->primitives)
+                {
+                    _object_textures.push_back(prim->sdf->texture);
+                    sdf_count++;
+                }
+            }
+        }
+        for (int j = 0; j < GLOBAL_SDF_MAX_OBJECT_COUNT; ++j)
+        {
+            if (j < sdf_count)
+                ez_bind_texture_array(1, _object_textures[j], 0, j);// mesh sdf
+            else
+                ez_bind_texture_array(1, _empty_texture, 0, j);
+        }
         // 对每个brick执行upload_global_sdf.comp
         for (int i = 0; i < _bricks.size(); ++i)
         {
             auto& upload_params_data = _upload_params_datas[i];
             ez_bind_texture(0, _global_sdf_texture, 0);
 
-            // 绑定mesh sdf
-            for (int j = 0; j < GLOBAL_SDF_MAX_OBJECT_COUNT; ++j)
-            {
-                if (j < upload_params_data.object_count)
-                    ez_bind_texture_array(1, _object_textures[upload_params_data.objects[j]], 0, j);// mesh sdf
-                else
-                    ez_bind_texture_array(1, _empty_texture, 0, j);
-            }
             ez_bind_sampler(2, _sampler);
             // primitive，每个brick一样
             ez_bind_buffer(3, _objects_buffer, _objects_buffer->size);

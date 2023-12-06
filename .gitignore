@@ -40,3 +40,4 @@ build
 .vscode
 cache
 *.gltf
+*.bin

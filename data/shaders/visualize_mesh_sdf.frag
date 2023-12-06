@@ -2,7 +2,7 @@
 #extension GL_ARB_separate_shader_objects : enable
 #define GLOBAL_SDF_MAX_OBJECT_COUNT 64
 #define MAX_STEP_COUNT 128
-#define MAX_DISTANCE 1024.f
+#define MAX_DISTANCE 32.f
 layout(location = 0) in vec2 in_texcoord;
 layout(location = 0) out vec4 out_color;
 
@@ -112,7 +112,7 @@ HitResult ray_trace(Ray ray, int sdf_index)
 
     // 如果和bounding box相交，直接从bounding box开始步进
     float step_time = intersections.x;
-    hit.color = vec3(0.0, 0.0, 0.0);
+    hit.color = vec3(1,1,0);
     hit.hit_time = MAX_DISTANCE;
     // hit.color = world_position + ray.world_direction * step_time;
     for (float step_i = 0.0; step_i < MAX_STEP_COUNT; ++step_i)
@@ -128,15 +128,15 @@ HitResult ray_trace(Ray ray, int sdf_index)
         }
         float sdf_distance = textureLod(sampler3D(mesh_sdf_textures[sdf_index], sdf_sampler), uv, 0.0).r;// 光线当前步进到的位置
 
-        float min_surface_thickness = 0.1;
+        float min_surface_thickness = 0.2;
         if (sdf_distance < min_surface_thickness)// 如果接近物体表面，或者进入物体内部
         {
             hit.hit_time = max(step_time + sdf_distance - min_surface_thickness, 0.0);
-            hit.step_count = step_i;
-            hit.color = step_position;
+            hit.step_count = step_time;
+            hit.color = sdf_distance > 0 ? vec3(1,0,1) : vec3(0,1,0);
             break;
         }
-
+        hit.color = vec3(0,0,1);
         step_time += voxel_size;// voxel_size 每次步进长度
     }
 

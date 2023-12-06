@@ -89,15 +89,15 @@ HitResult ray_trace(Ray ray)
         if(uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0 || uv.z < 0.0 || uv.z > 1.0){
             break;
         }
-        float sdf_distance = textureLod(sampler3D(global_sdf_texture, sdf_sampler), uv, 0.0).r * max_distance;
-        float min_surface_thickness = 0.23;
+        float sdf_distance = textureLod(sampler3D(global_sdf_texture, sdf_sampler), uv, 0.0).r;
+        float min_surface_thickness = 0.2;
         if (sdf_distance < min_surface_thickness)// 如果接近物体表面，或者进入物体内部
         {
             hit.hit_time = max(total_distance + sdf_distance - min_surface_thickness, 0.0);
             hit.step_count = i;
             break;
         }
-        total_distance += global_sdf_data.voxel_size;
+        total_distance += sdf_distance;
         if(total_distance > max_distance){
             break;
         }
@@ -146,7 +146,7 @@ void main()
     ray.world_position = view_buffer.view_position.xyz;
     ray.world_direction = normalize(target_position.xyz - view_buffer.view_position.xyz);
     HitResult hit = ray_trace(ray);
-    float max_distance = global_sdf_data.bounds_position_distance.w * 2.0;
+    float max_distance = global_sdf_data.bounds_position_distance.w;
 
     out_color = vec4(vec3(hit.hit_time / max_distance), 1.0);// 根据步进的远近决定颜色，介于01之间
 }

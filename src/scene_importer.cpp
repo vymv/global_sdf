@@ -177,9 +177,12 @@ Scene* load_scene(const std::string& file_path)
     auto path = std::filesystem::path(file_path);
     auto file_root = std::filesystem::path(file_path).parent_path();
     // Load meshes
+    uint32_t start_index = 0;
+    // data->meshes_count = 4;
     std::map<cgltf_mesh*, Mesh*> mesh_helper;
-    for (size_t i = 0; i < data->meshes_count; ++i)
+    for (size_t i = start_index; i < data->meshes_count + start_index; ++i)
     {
+        // i = 41;
         Mesh* mesh = new Mesh();
         scene->meshes.push_back(mesh);
         cgltf_mesh* cmesh = &data->meshes[i];

@@ -35,7 +35,7 @@ layout(std140, binding = 4) buffer UploadParams
     float pad0;
     vec3 coord_to_pos_add;
     uint object_count;
-    uvec4 objects[GLOBAL_SDF_MAX_OBJECT_COUNT / 4];// object index
+    ivec4 objects[GLOBAL_SDF_MAX_OBJECT_COUNT / 4];// object index
 };
 
 float combine_distance_to_sdf(float sdf, float distance)
@@ -56,13 +56,14 @@ float distance_to_object_sdf(float min_distance, ObjectData data, texture3D sdf_
         //find a way to get a valid uv
         volume_uv = clamp(volume_uv, 0, 1);
     }else{
+        // return 0;
         return textureLod(sampler3D(sdf_texture, sdf_sampler), volume_uv, 0.0).r * volume_scale;
     }
     vec3 volume_pos_clamped = (volume_uv - data.volume_to_uvw_add) / data.volume_to_uvw_mul;
     vec3 world_pos_clamped = (data.volume_to_world * vec4(volume_pos_clamped, 1.0)).xyz;
     float distance_to_volume = distance(world_pos, world_pos_clamped);
-    
-    if(min_distance <= distance_to_volume) return distance_to_volume;
+    // return distance_to_volume;
+    // if(min_distance <= distance_to_volume) return distance_to_volume;
 
     float sdf_distance = textureLod(sampler3D(sdf_texture, sdf_sampler), volume_uv, 0.0).r;
     sdf_distance *= volume_scale;
@@ -71,26 +72,6 @@ float distance_to_object_sdf(float min_distance, ObjectData data, texture3D sdf_
     if(distance_to_volume > 0){
         result = max(distance_to_volume, result);
     }
-    // vec3 volume_pos_clamped = clamp(volume_pos, -data.volume_bounds_extent, data.volume_bounds_extent);
-    // vec3 world_pos_clamped = (data.volume_to_world * vec4(volume_pos_clamped, 1.0)).xyz;// 确保当前计算的voxel在object的volume之内，否则clamp进来
-    // float distance_to_volume = distance(world_pos, world_pos_clamped);                  // 如果在volume之外，那么就是到volume的距离
-
-    // if (distance_to_volume < 0.01)
-    //     distance_to_volume = length((volume_pos - volume_pos_clamped) * volume_to_world_scale);
-    // distance_to_volume = max(distance_to_volume, 0);
-
-    // if (min_distance <= distance_to_volume) return distance_to_volume;
-
-    // // 计算sdf_distance
-    // float sdf_distance = textureLod(sampler3D(sdf_texture, sdf_sampler), volume_uv, 0.0).r;
-    // sdf_distance *= volume_scale;
-
-    // // 结合两个距离
-    // float result = combine_distance_to_sdf(sdf_distance, distance_to_volume);
-    // if (distance_to_volume > 0)
-    // {
-    //     result = max(distance_to_volume, result);
-    // }
     return result;
     // return distance_to_volume;
 }
@@ -109,6 +90,6 @@ void main()
         float object_distance = distance_to_object_sdf(min_distance, object_data, object_textures[object_idx], voxel_world_pos);
         min_distance = min(min_distance, object_distance);
     }
-    float distance = clamp(min_distance / max_distance, -1.0, 1.0);
-    imageStore(global_sdf_texture, voxel_coord, vec4(distance));
+    // float distance = clamp(min_distance / max_distance, -1.0, 1.0);
+    imageStore(global_sdf_texture, voxel_coord, vec4(min_distance));
 }

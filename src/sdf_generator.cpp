@@ -163,7 +163,7 @@ SDF* generate_sdf(const BoundingBox& bounds, uint32_t resolution, uint32_t verte
     sdf->local_to_uvw_add = -uvw_to_local_add / uvw_to_local_mul;
     uint32_t voxel_data_size = resolution * resolution * resolution * sizeof(float);
     std::vector<float> voxel_data;
-    voxel_data.resize(voxel_data_size);
+    voxel_data.resize(voxel_data_size / sizeof(float));
     uint32_t sample_count = 6;
     glm::vec3 sample_directions[6] = {
         glm::vec3(0.0f, 1.0f, 0.0f), // Up
@@ -202,6 +202,7 @@ SDF* generate_sdf(const BoundingBox& bounds, uint32_t resolution, uint32_t verte
 
                       glm::vec3 closeset_point;
                       glm::vec3 hit_normal;
+                      int hit_index = -1;
 
                       //   uint32_t hit_back_count = 0, hit_count = 0;
                       bool hit_back = false;
@@ -245,72 +246,27 @@ SDF* generate_sdf(const BoundingBox& bounds, uint32_t resolution, uint32_t verte
                           if (hit_distance >= distance)
                           {
                               hit = true;
+                              hit_index = i;
                               hit_distance = distance;
                               hit_position = p;
                               closeset_point = p;
-                              hit_normal = interpolateNormals(n0, n1, n2, calculateBarycentricCoordinates(v0, v1, v2, p));
-                              hit_back = glm::dot(hit_normal, voxel_pos - p) > 0;
+                              //   hit_normal = interpolateNormals(n0, n1, n2, calculateBarycentricCoordinates(v0, v1, v2, p));
+                              //   hit_back = glm::dot(hit_normal, voxel_pos - p) < 0;
                           }
                       }
                       if (hit)
                       {
                           min_distance = hit_distance;// 找到离voxel_pos最近的三角面片，计算距离
-                          if (hit_back)
-                          {
-                              min_distance *= -1;
-                          }
+                                                      //   if (x == 63 && y == 63 && z == 63)
+                                                      //   {
+                                                      //       int kk = 0;
+                                                      //   }
+                                                      //   if (hit_back)
+                                                      //   {
+                                                      //   min_distance *= -1;
+                                                      //   }
                       }
 
-                      //   if (hit_back_count > 0)
-                      //   {
-                      //       min_distance *= -1;
-                      //   }
-                      // 朝六个方向trace ray，判断sdf符号
-                      //   for (int sample = 0; sample < sample_count; sample++)
-                      //   {
-                      //       hit = false;
-                      //       hit_distance = INF;
-                      //       glm::vec3 ro = voxel_pos;
-                      //       glm::vec3 rd = sample_directions[sample];
-
-                      //       for (int i = 0; i < index_count; i += 3)
-                      //       {
-                      //           if (index_type == VK_INDEX_TYPE_UINT32)
-                      //           {
-                      //               idx0 = (int)indices_32[i];
-                      //               idx1 = (int)indices_32[i + 1];
-                      //               idx2 = (int)indices_32[i + 2];
-                      //           }
-                      //           else
-                      //           {
-                      //               idx0 = (int)indices_16[i];
-                      //               idx1 = (int)indices_16[i + 1];
-                      //               idx2 = (int)indices_16[i + 2];
-                      //           }
-
-                      //           glm::vec3 v0(vertices[idx0 * 3], vertices[idx0 * 3 + 1], vertices[idx0 * 3 + 2]);
-                      //           glm::vec3 v1(vertices[idx1 * 3], vertices[idx1 * 3 + 1], vertices[idx1 * 3 + 2]);
-                      //           glm::vec3 v2(vertices[idx2 * 3], vertices[idx2 * 3 + 1], vertices[idx2 * 3 + 2]);
-
-                      //           if (ray_intersect_triangle(ro, rd, v0, v1, v2, hit_distance))
-                      //           {
-                      //               hit = true;
-                      //               hit_normal = glm::normalize(glm::cross(v1 - v0, v2 - v0));
-                      //           }
-                      //       }
-
-                      //       if (hit)
-                      //       {
-                      //           hit_count++;
-                      //           if (glm::dot(rd, hit_normal) > 0)
-                      //               hit_back_count++;
-                      //       }
-                      //   }
-
-                      //   if ((float)hit_back_count > (float)sample_count * 0.2f && hit_count != 0)
-                      //   {
-                      //       min_distance *= -1;
-                      //   }
                       uint32_t z_address = resolution * resolution * z;
                       uint32_t y_address = resolution * y + z_address;
                       uint32_t x_address = x + y_address;
@@ -320,6 +276,7 @@ SDF* generate_sdf(const BoundingBox& bounds, uint32_t resolution, uint32_t verte
 #if USE_SDF_CACHE
     save_sdf_cached(file_path.c_str(), sdf, voxel_data);
 #endif
+    uint32_t size = voxel_data.size();
     EzTextureDesc texture_desc{};
     texture_desc.width = resolution;
     texture_desc.height = resolution;

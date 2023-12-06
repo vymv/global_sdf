@@ -69,7 +69,7 @@ private:
         float pad0;
         glm::vec3 coord_to_pos_add;
         uint32_t object_count;
-        uint32_t objects[GLOBAL_SDF_MAX_OBJECT_COUNT];
+        glm::ivec4 objects[GLOBAL_SDF_MAX_OBJECT_COUNT / 4];
     };
     std::vector<UploadParamsType> _upload_params_datas;
     EzBuffer _upload_params_buffer = VK_NULL_HANDLE;
